@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<configuration scan="true" scanPeriod="3 seconds" debug="true">
+
+	<statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener"/>
+
+	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>
+				%d [%thread] %-5level %logger{32} - %msg%n
+			</pattern>
+		</encoder>
+	</appender>
+
+	<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<!-- 
+		Logback expands ${catalina.base} using "variable substitution". This variable
+		is available when running either Tomcat 7 or GlassFish 4. It specifies the 
+		application server directory that contains the "logs" directory where the 
+		server log(s) are written. On Tomcat you can also use ${catalina.base},
+		but only if Tomcat is configured just a single instance. If it is configured
+		for more than one instance, then ${catalina.base} & ${catalina.home} point
+		to different directories. If this application will be run on a different
+		application server, then it may be necessary to arrange for an environment
+		variable named "catalina.base" to be defined that points to the directory
+		containing a "logs" directory where log files are to be written.
+		-->
+		<!--
+			On a default GlassFish 4 installation, this log file will be created
+			in: .../glassfish4/glassfish/domains/domain1/logs/
+		-->
+		<File>${catalina.base}/logs/obotest/obotest.log</File>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+		
+			<FileNamePattern>
+
+				<!-- Log file will be archived in "archive" directory at the beginning of each minute: -->
+				<!-- ${catalina.base}/logs/obotest/archive/logFile.%d{yyyy-MM-dd_HH-mm}.log.zip -->
+
+				<!-- Default. Log file will be archived at midnight each day: -->
+				${catalina.base}/logs/obotest/archive/logFile.%d{yyyy-MM-dd}.log.zip
+
+				<!-- ${catalina.base}/logs/obotest/archive/logFile.%d{yyyy-MM}.log.zip -->
+			</FileNamePattern>
+			
+			<maxHistory>365</maxHistory>	<!-- Maximum number of archive files to keep, deleting older files -->
+
+		</rollingPolicy>
+		
+		<encoder>
+			<Pattern>
+				<!-- %d{HH:mm:ss.SSS} [%thread] %-5level %logger{32} - %msg%n -->
+				<!-- This pattern includes also the name of the method. This slows down logging. -->
+				%d [%thread] %-5level %logger{32} %M - %msg%n
+			</Pattern>
+		</encoder>
+	</appender>
+
+	<!-- Application Loggers -->
+	<logger name="com.qfree.obotest"><level value="DEBUG" /></logger>
+	
+	<!-- 3rdparty Loggers -->
+
+	<root level="INFO">
+		<appender-ref ref="STDOUT"/>
+		<appender-ref ref="FILE"/>
+	</root>
+
+	<!--<include file="/tmp/DynamicWebGlassFishMaven-Testmart.xml"/>-->
+
+</configuration>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<artifactId>obotest</artifactId>
+		<groupId>com.qfree.obotest</groupId>
+		<version>1.0-SNAPSHOT</version>
+		<relativePath>../obotest/pom.xml</relativePath>
+	</parent>
+
+	<artifactId>obotest-servlets</artifactId>
+	<packaging>war</packaging>
+
+	<name>obotest-servlets</name>
+	
+	<dependencies>
+
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-api</artifactId>
+		</dependency>
+
+		<!--
+			For access to the EJBs.
+			
+			Scope=provided because the referenced artifacts will be packaged in 
+			the EAR. If we do not use scope=provided here, we encounter an error
+			when deploying the EAR to GlassFish. There error states that:
+				"... there are [2] ejbs in the application ...",
+			i.e., it seems that classes get packaged twice. 
+			
+			Note that we include a dependency for "obotest-ejb-client" even
+			though we have a dependency for "obotest-ejb" which itself has a
+			dependency on "obotest-ejb-client" with scope=provided. This is 
+			because transitive dependencies do not work with scope=provided,as 
+			stated in the description of the "provided" scope here: 
+			http://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html
+		-->
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb</artifactId>
+			<version>${project.parent.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb-client</artifactId>
+			<version>${project.parent.version}</version>
+			<scope>provided</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>2.4</version>
+				<configuration>
+					<failOnMissingWebXml>false</failOnMissingWebXml>
+				</configuration>
+			</plugin>
+
+		</plugins>
+	</build>
+
+</project>

@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<artifactId>obotest</artifactId>
+		<groupId>com.qfree.obotest</groupId>
+		<version>1.0-SNAPSHOT</version>
+		<relativePath>../obotest/pom.xml</relativePath>
+	</parent>
+
+	<artifactId>obotest-ear</artifactId>
+	<packaging>ear</packaging>
+
+	<name>obotest-ear</name>
+	
+	<dependencies>
+
+		<!-- I doubt that this javaee-api dependency is needed. DELETE IF THIS WORKD WITHOUT IT.
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-api</artifactId>
+		</dependency>
+		-->
+
+		<!-- 
+			These dependencies will be placed in the /lib directory at the root
+			of the EAR. All dependencies that you want to share across modules
+			should be specified here. I specified scope=compile here in order to
+			override scope=provided in parent Maven module, but it seems to work
+			OK even without scope=compile here.
+		-->
+		<!-- Logging -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>${slf4j.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-core</artifactId>
+			<version>${logback.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>${logback.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		
+		<!--
+			This JAR contains logback.xml for log configuration. It can also
+			contain other configuration files that are expected to be found on
+			the class path.
+		-->
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-config</artifactId>
+			<version>${project.parent.version}</version>
+			<type>jar</type>
+		</dependency>
+
+		<!-- Unit tests -->
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>${junit.version}</version>
+			<scope>compile</scope>
+		</dependency>
+
+		<!-- 
+			These dependencies will be packaged as modules within the EAR. This
+			is specified in the maven-ear-plugin configuration below.
+		-->
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb</artifactId>
+			<version>${project.parent.version}</version>
+			<type>ejb</type>
+		</dependency>
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb-client</artifactId>
+			<version>${project.parent.version}</version>
+			<type>jar</type>
+		</dependency>
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-servlets</artifactId>
+			<version>${project.parent.version}</version>
+			<type>war</type>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<version>2.9.1</version>
+				<configuration>
+					<version>7</version>
+<!-- 					<finalName>obotest</finalName> -->	<!-- default is ${project.build.finalName} -->
+					<defaultLibBundleDir>lib</defaultLibBundleDir>
+					<!--
+						The ear plugin must include a "modules" element. Each
+						module to be included in the EAR must be specified using 
+						an element that indicates the module type, e.g. 
+						"ejbModule", "webModule", "jarModule" and "appClientModule".
+					-->
+					<modules>
+						<ejbModule>
+							<groupId>com.qfree.obotest</groupId>
+							<artifactId>obotest-ejb</artifactId>
+						</ejbModule>
+						<jarModule>
+							<groupId>com.qfree.obotest</groupId>
+							<artifactId>obotest-ejb-client</artifactId>
+						</jarModule>
+						<webModule>
+							<groupId>com.qfree.obotest</groupId>
+							<artifactId>obotest-servlets</artifactId>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin>
+
+			<!-- Glassfish App Server -->
+			<plugin>
+				<groupId>org.glassfish.maven.plugin</groupId>
+				<artifactId>maven-glassfish-plugin</artifactId>
+				<version>2.1</version>
+				<!--
+				<executions>
+					<execution>
+						<id>gf-undeploy</id>
+						<goals>
+							<goal>undeploy</goal>
+						</goals>
+						<phase>clean</phase>
+					</execution>
+					<execution>
+						<id>gf-deploy</id>
+						<goals>
+							<goal>deploy</goal>
+						</goals>
+						<phase>package</phase>
+					</execution>
+				</executions>
+				-->
+				<configuration>
+					<glassfishDirectory>${glassfish.home}</glassfishDirectory>
+					<domainDirectory>${glassfish.home}/glassfish/domains/</domainDirectory>
+					<user>admin</user>
+					<!-- <adminPassword>ThereIsNoAdminPasswordButIMustSpecifySomethingHere</adminPassword> -->
+					<passwordFile>${glassfish.home}/glassfish/domains/domain1/config/admin-keyfile</passwordFile>
+					<domain>
+						<name>domain1</name>
+						<adminPort>4848</adminPort>
+						<httpPort>8080</httpPort>
+						<httpsPort>8443</httpsPort>
+					</domain>
+					<components>
+						<component>
+							<name>obotest</name>
+							<artifact>target/obotest-ear-${project.parent.version}.ear</artifact>
+						</component>
+					</components>
+				</configuration>
+			</plugin>
+
+		</plugins>
+	</build>
+	
+</project>

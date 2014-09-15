@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<artifactId>obotest</artifactId>
+		<groupId>com.qfree.obotest</groupId>
+		<version>1.0-SNAPSHOT</version>
+		<relativePath>../obotest/pom.xml</relativePath>
+	</parent>
+
+	<artifactId>obotest-ejb</artifactId>
+	<packaging>ejb</packaging>
+
+	<name>obotest-ejb</name>
+
+	<dependencies>
+
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-api</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.rabbitmq</groupId>
+			<artifactId>amqp-client</artifactId>
+			<version>3.3.5</version>
+		</dependency>
+
+		<!--
+			For access to the EJB remote interfaces and classes that are exposed
+			by these interfaces.
+			
+			Scope=provided because the referenced artifacts will be packaged in 
+			the EAR. If we do not use scope=provided here, we encounter an error
+			when deploying the EAR to GlassFish. There error states that:
+				"... there are [2] ejbs in the application ...",
+			i.e., it seems that classes get packaged twice. 
+		-->
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb-client</artifactId>
+			<scope>provided</scope>
+			<version>${project.parent.version}</version>
+		</dependency>
+
+		<!--
+			This is needed so we so we have access to the driver:
+				org.apache.derby.jdbc.ClientDriver
+			that is specified in persistence.xml (during unit tests).
+		-->
+		<dependency>
+			<groupId>org.apache.derby</groupId>
+			<artifactId>derbyclient</artifactId>
+			<version>10.10.2.0</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- 
+			This dependency is needed in order to get access to the class:
+				org.eclipse.persistence.transaction.JTATransactionController
+			in com.qfree.obotest.junit.JTATransactionController during unit 
+			testing. This is required because the unit test code in this project
+			runs outside of a Java EE container.
+		-->
+		<dependency>
+			<groupId>org.eclipse.persistence</groupId>
+			<artifactId>eclipselink</artifactId>
+			<version>2.5.2</version>
+			<scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ejb-plugin</artifactId>
+				<version>2.3</version>
+				<configuration>
+					<ejbVersion>3.2</ejbVersion>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<skipTests>false</skipTests>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-report-plugin</artifactId>
+			</plugin>
+
+		</plugins>
+	</build>
+
+</project>

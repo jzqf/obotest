@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="2.1"
+	xmlns="http://xmlns.jcp.org/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence http://xmlns.jcp.org/xml/ns/persistence/persistence_2_1.xsd">
+
+	<!--
+		Replace with application-specific persistent unit name. The name here
+		must be different from that used in peristence.xml used in the 
+		application code being tested because the JPA implementation will use
+		the first occurance of a persistence unit that it finds and it might
+		not be this one.
+	-->
+	<persistence-unit name="obotest-ejb_junit">
+	
+		<!--
+			These lines will be application specific. Replace them with whatever
+			appears in persistence.xml for your application:
+		-->
+		<jta-data-source>jdbc/cookbookdb</jta-data-source>
+		<class>com.qfree.obotest.entity.City</class>
+		<class>com.qfree.obotest.entity.Country</class>
+		<class>com.qfree.obotest.entity.Zip</class>
+
+		<properties>
+
+			<!--
+				Since this project runs outside of a Java EE container, we need
+				to set up the database connection manually here. Replace these
+				lines with whatever details are appropriate for the databse that
+				will be used for unit testing this application.
+			-->
+			<property name="javax.persistence.jdbc.driver" value="org.apache.derby.jdbc.ClientDriver" />
+			<property name="javax.persistence.jdbc.url" value="jdbc:derby://localhost:1527/cookbookdb" />
+			<property name="javax.persistence.jdbc.user" value="cookbookuser" />
+			<property name="javax.persistence.jdbc.password" value="cookbook" />
+
+			<property name="eclipselink.logging.level" value="FINE" />
+
+			<!--
+				This class defines a "JTA transaction controller". It needs to
+				be specified here because the code in this project runs 
+				*outside* of a Java EE container (e.g., GlassFish). Normally, 
+				the container will set this up for you automatically.
+			 -->
+			<property name="eclipselink.target-server"
+				value="com.qfree.obotest.container.JTATransactionController" />
+
+		</properties>
+	</persistence-unit>
+</persistence>

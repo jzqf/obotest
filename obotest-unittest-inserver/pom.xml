@@ -1,0 +1,77 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<artifactId>obotest</artifactId>
+		<groupId>com.qfree.obotest</groupId>
+		<version>1.0-SNAPSHOT</version>
+		<relativePath>../obotest/pom.xml</relativePath>
+	</parent>
+
+	<artifactId>obotest-unittest-inserver</artifactId>
+	<packaging>jar</packaging>
+
+	<name>obotest-unittest-inserver</name>
+
+	<dependencies>
+
+		<!-- 
+			Is this really needed here?  Yes, it is. Since the parent Maven
+			module has scope=provided, this might indicate that we only need
+			interfaces from this dependency, since the code in this project 
+			does not run in a Java EE container (GlassFish or otherwise).
+		-->
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-api</artifactId>
+		</dependency>
+
+		<!-- So we can run unit tests on EJBs, ...
+			
+			Note that we include a dependency for "obotest-ejb-client" even
+			though we have a dependency for "obotest-ejb" which itself has a
+			dependency on "obotest-ejb-client" with scope=provided. This is 
+			because transitive dependencies do not work with scope=provided,as 
+			stated in the description of the "provided" scope here: 
+			http://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html
+		-->
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb</artifactId>
+			<version>${project.parent.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.qfree.obotest</groupId>
+			<artifactId>obotest-ejb-client</artifactId>
+			<version>${project.parent.version}</version>
+		</dependency>
+
+		<!-- 
+			This dependency is needed in order to access the Java EE GlassFish
+			implementation as well as my local GlassFish *configuration*, e.g.,
+			DataSources and other objects that I have configured and that can be
+			looked up via JNDI from this particular GlassFish installation.
+		-->
+		<dependency>
+			<groupId>any-old-group-id</groupId>
+			<artifactId>any-old-artifact-id</artifactId>
+			<version>0.0</version>
+			<scope>system</scope>
+			<systemPath>${glassfish.home}/glassfish/lib/gf-client.jar</systemPath>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+
+		</plugins>
+	</build>
+</project>
+
