@@ -1,5 +1,7 @@
 package com.qfree.obotest.eventsender;
 
+import java.io.IOException;
+
 import javax.ejb.Asynchronous;
 import javax.ejb.Lock;
 import javax.ejb.LockType;
@@ -10,6 +12,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.ImageEvent;
+import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.ConsumerCancelledException;
+import com.rabbitmq.client.QueueingConsumer;
+import com.rabbitmq.client.ShutdownSignalException;
 
 /*
  * This class is used as a base class for "ImageTest" helper singleton EJBs
@@ -33,6 +41,9 @@ public abstract class MessageConsumerHelperImageTest implements MessageConsumerH
 
 	private static final Logger logger = LoggerFactory.getLogger(MessageConsumerHelperImageTest.class);
 
+	private static final String IMAGE_QUEUE_NAME = "image_queue";
+	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 5000;
+
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
 	 * this class has been used to create a subclass. It is the duty of the 
@@ -41,9 +52,118 @@ public abstract class MessageConsumerHelperImageTest implements MessageConsumerH
 	 */
 	String subClassName = null;
 
+	Connection connection = null;
+	Channel channel = null;
+	QueueingConsumer consumer = null;
+
     @Inject
 	@Image
 	Event<ImageEvent> imageEvent;
+
+	public void openConnection() throws IOException {
+
+		ConnectionFactory factory = new ConnectionFactory();
+		factory.setHost("localhost");
+
+		// Do *not* end this URI with "/". It will not work.
+		//		factory.setUri("amqp://guest:guest@trdds010.q-free.com:5672");
+
+		//		factory.setHost("trdds010.q-free.com");
+		//		factory.setPort(5672);
+		//		factory.setUsername("guest");
+		//		factory.setPassword("guest");
+		//		factory.setVirtualHost("/");
+
+		connection = factory.newConnection();
+	}
+
+	public void closeConnection() throws IOException {
+		if (connection != null) {
+			connection.close();
+		}
+	}
+
+	public void openChannel() throws IOException {
+		channel = connection.createChannel();
+		channel.queueDeclare(IMAGE_QUEUE_NAME, true, false, false, null);
+		channel.basicQos(1);
+	}
+
+	public void closeChannel() throws IOException {
+		if (channel != null) {
+			channel.close();
+		}
+	}
+
+	public void configureConsumer() throws IOException {
+		consumer = new QueueingConsumer(channel);
+		channel.basicConsume(IMAGE_QUEUE_NAME, false, consumer);
+	}
+
+	public void handleDeliveries() throws ShutdownSignalException,
+			ConsumerCancelledException, InterruptedException, IOException {
+		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
+		if (delivery != null) {
+
+			byte[] imageBytes = delivery.getBody();
+
+			logger.debug("[{}]: Received image: {} bytes", subClassName, imageBytes.length);
+
+			/*
+			 * TODO CAN WE HANDLE THE CASE WHERE THE OBSERVER THREAD CANNOT PROCESS THE MESSAGE FOR SOME REASON?
+			 * 
+			 * How about having the "Observer" thread that receives the event fired
+			 * from this thread fire an event back to this thread to tell it to 
+			 * acknowledge the event? The acknowledgement event cannot be sent to the 
+			 * main thread class because that class is not managed by the container. Therefore,
+			 * it would be necessary to fire the acknowledgement event back to the
+			 * singleton helper bean to perform the acknowledgement.
+			 * In order to implement this, it would be necessary to (at least):
+			 * 
+			 * 		1.	Send the "delivery tag" along with
+			 * 			rest of the event payload to the "Observer" method from this 
+			 * 			thread and then later fire this "delivery tag" back to 
+			 * 			the singleton helper bean via the acknowledgement event
+			 * 			sent from the "Observer" method that processes the RabbitMQ
+			 * 			message payload.  Is this possible?
+			 * 		
+			 * This will mean that we cannot just forward the raw message bytes to the
+			 * "Observer" method from this thread, because we need to also send the
+			 * "delivery tag"
+			 * 
+			 * This will be more complicate if we use several RabbitMQ consumer threads,
+			 * because it will also be necessary to ensure that the acknowledgement event 
+			 * is fired back to the appropriate thread that has the reference to the correct 
+			 * channel on which the acknowledgement must be sent.
+			 * 
+			 * It is probably best to just wait and deal with this functionality at
+			 * a later time, since it may never be needed.
+			 */
+
+			/*
+			 * TODO If there is something wrong with the RabbitMQ message payload, 
+			 * we might want to sent it to a special RabbitMQ exchange that collects
+			 * bad messages, instead of processing it here through the normal workflow?
+			 */
+
+			logger.debug("[{}]: Requesting bean to fire an asynchronous \"image\" CDI event...", subClassName);
+			this.fireImageEvent(imageBytes);
+			logger.debug("[{}]: Returned from request to fire the asynchronous \"image\" CDI event", subClassName);
+
+			channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+
+		} else {
+			/*
+			 * This just means that there were no messages to consume after
+			 * waiting the timeout period. This in perfectly normal. The 
+			 * timeout is implemented so that the calling thread can check 
+			 * whether there has been a request made for it to terminate or 
+			 * whatever. 
+			 */
+			logger.trace("[{}]: consumer.nextDelivery() timed out after {} ms",
+					subClassName, RABBITMQ_CONSUMER_TIMEOUT_MS);
+		}
+	}
 
 	/*
 	 * By making this method (as well as the method that receives the fired 
@@ -68,14 +188,18 @@ public abstract class MessageConsumerHelperImageTest implements MessageConsumerH
 	 */
 	@Asynchronous
 	@Lock(LockType.WRITE)
-	@Override
-	public void fireImageEvent(byte[] imageBytes) {
+	private void fireImageEvent(byte[] imageBytes) {
 		logger.debug("[{}]: Creating event payload for image [{} bytes]", subClassName, imageBytes.length);
 		ImageEvent imagePayload = new ImageEvent();
 		imagePayload.setImageBytes(imageBytes);
-		logger.debug("[{}]: Firing event for {}", subClassName, imagePayload);
+		logger.debug("[{}]: Firing CDI event for {}", subClassName, imagePayload);
 		imageEvent.fire(imagePayload);
 		logger.debug("[{}]: Returned from firing event", subClassName);
     }
+
+	//	@PreDestroy
+	//	public void terminate() {
+	//		logger.info("[{}]: @PreDestroy: What should/can I do here?...", subClassName);
+	//	}
 
 }

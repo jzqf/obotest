@@ -9,6 +9,7 @@ import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import javax.ejb.ConcurrencyManagement;
 import javax.ejb.ConcurrencyManagementType;
+import javax.ejb.DependsOn;
 import javax.ejb.LocalBean;
 import javax.ejb.Lock;
 import javax.ejb.LockType;
@@ -34,10 +35,38 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * @Startup marks this bean for "eager initialization" during the application 
  * startup sequence.
  * 
+ * @DependsOn is iportant here. It not only ensures that the singleton beans
+ * that are listed have been initialized before this singleton's PostConstruct 
+ * method is called. This is probably not important because those beans that 
+ * are used needed in threads started from this bean are injected below; this
+ * probably means that they will exist and be initialized when they are needed 
+ * here. More important is that during application shutdown the container 
+ * ensures that all singleton beans on with which this singleton has a DependsOn
+ * relationship are still available during this singleton's PreDestroy method.
+ * Testing has shown that if this @DependsOn annotation is not used, at least
+ * one exception is thrown because one or nore of the dependent beans (the beans
+ * that should be listed in the @DependsOn annotation) are destroyed early 
+ * while the message consumer thread(s) is(are) shutting down. The exception 
+ * that is thrown is:
+ * 
+ *     javax.ejb.EJBException: Attempt to invoke when container is in STOPPED
+ * 
+ * Unfortunately, *all* beans that can _potentially_ be injected here must be
+ * listed in the @DependsOn annotation, even only two will ever be injected
+ * during any one run of this application (the two beans listed in the 
+ * <alternatives> element of beans.xml that are injected into 
+ * messageConsumerHelperBean1 and messageConsumerHelperBean2 below)). But there 
+ * is no way to specify just those beans here, other than hardwiring their names 
+ * here. So to avoid the need to edit this annotation each time we change these
+ * alternatives (which is possible, but the application must be re-compiled),
+ * *all* beans that can potentially be injected here are listed in the 
+ * @DependsOn annotation.
+ * 
  * Container-managed concurrency is the default concurrency mechanism for an EJB
  * container, but we set is explicitly here anyway.
  */
 @Startup
+@DependsOn({ "MessageConsumerHelperImageTestBean1", "MessageConsumerHelperImageTestBean2" })
 @ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
 @Singleton
 @LocalBean
@@ -168,11 +197,11 @@ public class RabbitMQConsumerController {
 		Timer timer =
 				timerService.createSingleActionTimer(DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS, new TimerConfig());
 
-		if (messageConsumerHelperBean1 == messageConsumerHelperBean2) {
-			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are the same beans");
-		} else {
-			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are different beans");
-		}
+		//		if (messageConsumerHelperBean1 == messageConsumerHelperBean2) {
+		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are the same beans");
+		//		} else {
+		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are different beans");
+		//		}
 
 		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 			/*
@@ -375,6 +404,9 @@ public class RabbitMQConsumerController {
 	public void terminate() {
 		logger.info("Shutting down...");
 
+		//		logger.info("Start of terminate() method: messageConsumerHelperBean1 = {}", messageConsumerHelperBean1);
+		//		logger.info("Start of terminate() method: messageConsumerHelperBean2 = {}", messageConsumerHelperBean2);
+
 		this.stop();
 
 		// Wait for the consumer thread(s) to terminate.
@@ -403,6 +435,9 @@ public class RabbitMQConsumerController {
 				}
 			}
 		}
+
+		//		logger.info("End of terminate() method: messageConsumerHelperBean1 = {}", messageConsumerHelperBean1);
+		//		logger.info("End of terminate() method: messageConsumerHelperBean2 = {}", messageConsumerHelperBean2);
 
 		//		long loopTime = 0;
 		//		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
