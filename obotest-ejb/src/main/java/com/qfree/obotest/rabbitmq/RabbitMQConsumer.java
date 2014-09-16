@@ -54,11 +54,6 @@ public class RabbitMQConsumer implements Runnable {
 	public RabbitMQConsumer() {
 	}
 
-	public RabbitMQConsumer(RabbitMQConsumerController rabbitMQConsumerController) {
-		super();
-		this.rabbitMQConsumerController = rabbitMQConsumerController;
-	}
-
 	public RabbitMQConsumer(
 			RabbitMQConsumerController rabbitMQConsumerController,
 			MessageConsumerHelper messageConsumerHelper) {

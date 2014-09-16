@@ -333,7 +333,6 @@ public class RabbitMQConsumerController {
 					//					}
 
 					logger.info("Starting RabbitMQ consumer thread...");
-					//	rabbitMQConsumer = new RabbitMQConsumer(this);
 					rabbitMQConsumer = new RabbitMQConsumer(this, messageConsumerHelperBean1);
 					rabbitMQConsumerThread = threadFactory.newThread(rabbitMQConsumer);
 					rabbitMQConsumerThread.start();
@@ -356,7 +355,6 @@ public class RabbitMQConsumerController {
 
 						logger.info("Starting RabbitMQ consumer thread {}...", threadIndex);
 
-						//	rabbitMQConsumers.set(threadIndex, new RabbitMQConsumer(this));
 						rabbitMQConsumers.set(threadIndex,
 								new RabbitMQConsumer(this, rabbitMQConsumerThreadImageEventSenders.get(threadIndex)));
 						rabbitMQConsumerThreads.set(threadIndex,
