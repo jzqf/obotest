@@ -9,8 +9,6 @@ import javax.annotation.PreDestroy;
 import javax.annotation.Resource;
 import javax.ejb.ConcurrencyManagement;
 import javax.ejb.ConcurrencyManagementType;
-import javax.ejb.DependsOn;
-import javax.ejb.EJB;
 import javax.ejb.LocalBean;
 import javax.ejb.Lock;
 import javax.ejb.LockType;
@@ -22,13 +20,14 @@ import javax.ejb.Timer;
 import javax.ejb.TimerConfig;
 import javax.ejb.TimerService;
 import javax.enterprise.concurrent.ManagedThreadFactory;
+import javax.inject.Inject;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.qfree.obotest.eventsender.HelperBean1;
+import com.qfree.obotest.eventsender.HelperBean2;
 import com.qfree.obotest.eventsender.MessageConsumerHelper;
-import com.qfree.obotest.eventsender.MessageConsumerHelperBean1;
-import com.qfree.obotest.eventsender.MessageConsumerHelperBean2;
 import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
 
 /*
@@ -36,10 +35,9 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * startup sequence.
  * 
  * Container-managed concurrency is the default concurrency mechanism for an EJB
- * container, but we state is explicitly here.
+ * container, but we set is explicitly here anyway.
  */
 @Startup
-@DependsOn({ "MessageConsumerHelperBean1", "MessageConsumerHelperBean2" })
 @ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
 @Singleton
 @LocalBean
@@ -65,11 +63,28 @@ public class RabbitMQConsumerController {
 	@Resource
 	TimerService timerService;
 
-	@EJB
-	MessageConsumerHelperBean1 messageConsumerHelperBean1;	// used by the first thread
+	/*
+	 * The qualifiers @HelperBean1 & @HelperBean2 are needed here because the 
+	 * classes of both of the singleton EJB objects to be injected here 
+	 * implement the MessageConsumerHelper interface. One of these classes is 
+	 * annotated with the qualifier @HelperBean1 and the other is annotated with
+	 * the qualifier @HelperBean2. This will ensure that each thread will get 
+	 * its own singleton helper EJB. This will reduce contention over sharing 
+	 * the *same* singleton between both/all threads.
+	 * 
+	 * Testing seems to indicate that qualifiers, e.g., @HelperBean1 & 
+	 * @HelperBean2 don't work when EJBs are injected with @EJB, but they *do*
+	 * work with injection via @Inject.
+	 */
+	//	@EJB
+	@Inject
+	@HelperBean1
+	MessageConsumerHelper messageConsumerHelperBean1;	// used by the first thread
 
-	@EJB
-	MessageConsumerHelperBean2 messageConsumerHelperBean2;	// used by the second thread
+	//	@EJB
+	@Inject
+	@HelperBean2
+	MessageConsumerHelper messageConsumerHelperBean2;	// used by the second thread
 
 	private volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 
@@ -153,11 +168,11 @@ public class RabbitMQConsumerController {
 		Timer timer =
 				timerService.createSingleActionTimer(DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS, new TimerConfig());
 
-		//		if (messageConsumerHelperBean1 == messageConsumerHelperBean2) {
-		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are the same beans");
-		//		} else {
-		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are different beans");
-		//		}
+		if (messageConsumerHelperBean1 == messageConsumerHelperBean2) {
+			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are the same beans");
+		} else {
+			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are different beans");
+		}
 
 		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 			/*

@@ -4,22 +4,23 @@ import javax.ejb.ConcurrencyManagement;
 import javax.ejb.ConcurrencyManagementType;
 import javax.ejb.LocalBean;
 import javax.ejb.Singleton;
-import javax.ejb.Startup;
+import javax.enterprise.inject.Alternative;
 
 /*
  * This class is essentially identical to MessageConsumerHelperBean1.
  * 
  * Two identical classes are used to create two singleton session beans that 
  * can divide the workload between two separate MessageMQ consumer threads.
- * It should be possible to extend a base class here as well as in class
- * MessageConsumerHelperBean2 so that it is not necessary to have so much duplicated
- * code, but then all logging that occurs from this base class will appear to
- * come from that base class.
+ * 
+ * Each of these two classes are differentiated by their qualifiers:
+ * 
+ *     @HelperBean1 or @HelperBean2
  */
-@Startup
 @ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
 @Singleton
 @LocalBean
+@Alternative
+@HelperBean2
 public class MessageConsumerHelperBean2 extends MessageConsumerHelperBean {
 
 	public MessageConsumerHelperBean2() {
