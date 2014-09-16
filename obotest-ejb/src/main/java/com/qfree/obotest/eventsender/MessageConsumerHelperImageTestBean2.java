@@ -7,7 +7,7 @@ import javax.ejb.Singleton;
 import javax.enterprise.inject.Alternative;
 
 /*
- * This class is essentially identical to MessageConsumerHelperBean2.
+ * This class is essentially identical to MessageConsumerHelperImageTestBean1.
  * 
  * Two identical classes are used to create two singleton session beans that 
  * can divide the workload between two separate MessageMQ consumer threads.
@@ -20,10 +20,10 @@ import javax.enterprise.inject.Alternative;
 @Singleton
 @LocalBean
 @Alternative
-@HelperBean1
-public class MessageConsumerHelperBean1 extends MessageConsumerHelperBean {
+@HelperBean2
+public class MessageConsumerHelperImageTestBean2 extends MessageConsumerHelperImageTest {
 
-	public MessageConsumerHelperBean1() {
+	public MessageConsumerHelperImageTestBean2() {
 		super();
 		/*
 		 * This field is used to enable the name of this subclass to be logged 
@@ -32,9 +32,9 @@ public class MessageConsumerHelperBean1 extends MessageConsumerHelperBean {
 		this.subClassName = this.getClass().getSimpleName();
 	}
 
-	//public class MessageConsumerHelperBean1 implements MessageConsumerHelper {
+	//public class MessageConsumerHelperImageTestBean2 implements MessageConsumerHelper {
 	//
-	//	private static final Logger logger = LoggerFactory.getLogger(MessageConsumerHelperBean1.class);
+	//	private static final Logger logger = LoggerFactory.getLogger(MessageConsumerHelperImageTestBean2.class);
 	//
 	//	@Inject
 	//	@Image

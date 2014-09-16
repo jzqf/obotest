@@ -8,10 +8,12 @@
 	
 		<!--
 			These are the implementations to use for the message helper 
-			singleton EJBs.
+			singleton EJBs. Since all implementations are annotated with
+			@Alternative, alternatives *must* be specified here (there are no
+			default implementations that are not annotated with @Alternative).
 		-->
-		<class>com.qfree.obotest.eventsender.MessageConsumerHelperBean1</class>
-		<class>com.qfree.obotest.eventsender.MessageConsumerHelperBean2</class>
+		<class>com.qfree.obotest.eventsender.MessageConsumerHelperImageTestBean1</class>
+		<class>com.qfree.obotest.eventsender.MessageConsumerHelperImageTestBean2</class>
 		
 	</alternatives>
 
