@@ -1,4 +1,4 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.eventlistener;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;

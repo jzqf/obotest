@@ -1,4 +1,4 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.eventlistener;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -12,11 +12,10 @@ import java.lang.annotation.Target;
 import javax.inject.Qualifier;
 
 /**
- * Qualifier to ensure that a message consumer thread gets its own singlelton 
- * helper EJB.
+ * Qualifier for Image events.
  */
 @Qualifier
 @Retention(RUNTIME)
 @Target({METHOD, FIELD, PARAMETER, TYPE})
-public @interface HelperBean1 {
+public @interface ImageQualifier {
 }

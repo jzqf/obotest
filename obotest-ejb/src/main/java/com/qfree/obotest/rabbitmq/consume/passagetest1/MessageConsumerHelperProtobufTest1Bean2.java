@@ -1,10 +1,12 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import javax.ejb.ConcurrencyManagement;
 import javax.ejb.ConcurrencyManagementType;
 import javax.ejb.LocalBean;
 import javax.ejb.Singleton;
 import javax.enterprise.inject.Alternative;
+
+import com.qfree.obotest.rabbitmq.consume.HelperBean2;
 
 /*
  * This class is essentially identical to 

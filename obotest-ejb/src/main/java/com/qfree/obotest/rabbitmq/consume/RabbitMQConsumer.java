@@ -1,13 +1,12 @@
-package com.qfree.obotest.rabbitmq;
+package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.eventsender.MessageConsumerHelper;
-import com.qfree.obotest.rabbitmq.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
-import com.qfree.obotest.rabbitmq.RabbitMQConsumerController.RabbitMQConsumerStates;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerStates;
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
 
@@ -29,7 +28,7 @@ public class RabbitMQConsumer implements Runnable {
 	//	@EJB - cannot use because this class is not instantiated by the container
 	RabbitMQConsumerController rabbitMQConsumerController = null;
 
-	MessageConsumerHelper messageConsumerHelper = null;
+	RabbitMQConsumerHelper messageConsumerHelper = null;
 
 	public RabbitMQConsumerStates getState() {
 		return state;
@@ -49,7 +48,7 @@ public class RabbitMQConsumer implements Runnable {
 
 	public RabbitMQConsumer(
 			RabbitMQConsumerController rabbitMQConsumerController,
-			MessageConsumerHelper messageConsumerHelper) {
+			RabbitMQConsumerHelper messageConsumerHelper) {
 		super();
 		this.rabbitMQConsumerController = rabbitMQConsumerController;
 		this.messageConsumerHelper = messageConsumerHelper;

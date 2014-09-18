@@ -1,4 +1,4 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.rabbitmq.consume;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -18,5 +18,5 @@ import javax.inject.Qualifier;
 @Qualifier
 @Retention(RUNTIME)
 @Target({METHOD, FIELD, PARAMETER, TYPE})
-public @interface HelperBean2 {
+public @interface HelperBean1 {
 }

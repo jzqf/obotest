@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.PassageTest1Event;
-import com.qfree.obotest.eventsender.PassageQualifier;
 
 @Stateless
 @LocalBean

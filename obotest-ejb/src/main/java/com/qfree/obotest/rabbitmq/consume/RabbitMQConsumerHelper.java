@@ -1,11 +1,11 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
 
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
 
-public interface MessageConsumerHelper {
+public interface RabbitMQConsumerHelper {
 
 	public void openConnection() throws IOException;
 

@@ -1,4 +1,4 @@
-package com.qfree.obotest.rabbitmq;
+package com.qfree.obotest.rabbitmq.consume;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,9 +26,6 @@ import javax.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.eventsender.HelperBean1;
-import com.qfree.obotest.eventsender.HelperBean2;
-import com.qfree.obotest.eventsender.MessageConsumerHelper;
 import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
 
 /*
@@ -61,6 +58,13 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * alternatives (which is possible, but the application must be re-compiled),
  * *all* beans that can potentially be injected here are listed in the 
  * @DependsOn annotation.
+ * 
+ * Note that just the ejb-names of the singleton classes are listed in the 
+ * @DependsOn annotation, The ejb-name of a singleton class defaults to the 
+ * unqualified name of the singleton session bean class. If these unqualified
+ * names are not unique, it is necessary to specify unique names for the beans
+ * using the "name" element of the @Singleton annotation and then use those bean
+ * names here in the @DependsOn annotation.
  * 
  * Container-managed concurrency is the default concurrency mechanism for an EJB
  * container, but we set is explicitly here anyway.
@@ -110,12 +114,12 @@ public class RabbitMQConsumerController {
 	//	@EJB
 	@Inject
 	@HelperBean1
-	MessageConsumerHelper messageConsumerHelperBean1;	// used by the first thread
+	RabbitMQConsumerHelper messageConsumerHelperBean1;	// used by the first thread
 
 	//	@EJB
 	@Inject
 	@HelperBean2
-	MessageConsumerHelper messageConsumerHelperBean2;	// used by the second thread
+	RabbitMQConsumerHelper messageConsumerHelperBean2;	// used by the second thread
 
 	private volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 
@@ -127,7 +131,7 @@ public class RabbitMQConsumerController {
 	// element in each list for each RabbitMQ consumer thread to be started from
 	// this singleton session bean.
 	List<RabbitMQConsumer> rabbitMQConsumers = null;
-	List<MessageConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
+	List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
 	List<Thread> rabbitMQConsumerThreads = null;
 
 	@Lock(LockType.READ)
