@@ -3,8 +3,8 @@
 
 package com.qfree.obotest.protobuf;
 
-public final class PassageProtos {
-  private PassageProtos() {}
+public final class PassageTest1Protos {
+  private PassageTest1Protos() {}
   public static void registerAllExtensions(
       com.google.protobuf.ExtensionRegistry registry) {
   }
@@ -39,22 +39,22 @@ public final class PassageProtos {
   /**
    * Protobuf type {@code protobuf_test1.Passage}
    */
-  public static final class Passage extends
+  public static final class PassageTest1 extends
       com.google.protobuf.GeneratedMessage
       implements PassageOrBuilder {
     // Use Passage.newBuilder() to construct.
-    private Passage(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+    private PassageTest1(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
       super(builder);
       this.unknownFields = builder.getUnknownFields();
     }
-    private Passage(boolean noInit) { this.unknownFields = com.google.protobuf.UnknownFieldSet.getDefaultInstance(); }
+    private PassageTest1(boolean noInit) { this.unknownFields = com.google.protobuf.UnknownFieldSet.getDefaultInstance(); }
 
-    private static final Passage defaultInstance;
-    public static Passage getDefaultInstance() {
+    private static final PassageTest1 defaultInstance;
+    public static PassageTest1 getDefaultInstance() {
       return defaultInstance;
     }
 
-    public Passage getDefaultInstanceForType() {
+    public PassageTest1 getDefaultInstanceForType() {
       return defaultInstance;
     }
 
@@ -64,7 +64,7 @@ public final class PassageProtos {
         getUnknownFields() {
       return this.unknownFields;
     }
-    private Passage(
+    private PassageTest1(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
@@ -111,29 +111,29 @@ public final class PassageProtos {
     }
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-			return com.qfree.obotest.protobuf.PassageProtos.internal_static_protobuf_test1_Passage_descriptor;
+			return com.qfree.obotest.protobuf.PassageTest1Protos.internal_static_protobuf_test1_Passage_descriptor;
     }
 
     protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
         internalGetFieldAccessorTable() {
-			return com.qfree.obotest.protobuf.PassageProtos.internal_static_protobuf_test1_Passage_fieldAccessorTable
+			return com.qfree.obotest.protobuf.PassageTest1Protos.internal_static_protobuf_test1_Passage_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-							com.qfree.obotest.protobuf.PassageProtos.Passage.class,
-							com.qfree.obotest.protobuf.PassageProtos.Passage.Builder.class);
+							com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1.class,
+							com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1.Builder.class);
     }
 
-    public static com.google.protobuf.Parser<Passage> PARSER =
-        new com.google.protobuf.AbstractParser<Passage>() {
-      public Passage parsePartialFrom(
+    public static com.google.protobuf.Parser<PassageTest1> PARSER =
+        new com.google.protobuf.AbstractParser<PassageTest1>() {
+      public PassageTest1 parsePartialFrom(
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws com.google.protobuf.InvalidProtocolBufferException {
-        return new Passage(input, extensionRegistry);
+        return new PassageTest1(input, extensionRegistry);
       }
     };
 
     @java.lang.Override
-    public com.google.protobuf.Parser<Passage> getParserForType() {
+    public com.google.protobuf.Parser<PassageTest1> getParserForType() {
       return PARSER;
     }
 
@@ -248,62 +248,62 @@ public final class PassageProtos {
       return super.writeReplace();
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(
         com.google.protobuf.ByteString data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(
         com.google.protobuf.ByteString data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(byte[] data)
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(byte[] data)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(
         byte[] data,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws com.google.protobuf.InvalidProtocolBufferException {
       return PARSER.parseFrom(data, extensionRegistry);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(java.io.InputStream input)
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(java.io.InputStream input)
         throws java.io.IOException {
       return PARSER.parseFrom(input);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return PARSER.parseFrom(input, extensionRegistry);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseDelimitedFrom(java.io.InputStream input)
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseDelimitedFrom(java.io.InputStream input)
         throws java.io.IOException {
       return PARSER.parseDelimitedFrom(input);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseDelimitedFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseDelimitedFrom(
         java.io.InputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
       return PARSER.parseDelimitedFrom(input, extensionRegistry);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(
         com.google.protobuf.CodedInputStream input)
         throws java.io.IOException {
       return PARSER.parseFrom(input);
     }
 
-		public static com.qfree.obotest.protobuf.PassageProtos.Passage parseFrom(
+		public static com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parseFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
@@ -313,7 +313,7 @@ public final class PassageProtos {
     public static Builder newBuilder() { return Builder.create(); }
     public Builder newBuilderForType() { return newBuilder(); }
 
-		public static Builder newBuilder(com.qfree.obotest.protobuf.PassageProtos.Passage prototype) {
+		public static Builder newBuilder(com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 prototype) {
       return newBuilder().mergeFrom(prototype);
     }
     public Builder toBuilder() { return newBuilder(this); }
@@ -329,18 +329,18 @@ public final class PassageProtos {
      */
     public static final class Builder extends
         com.google.protobuf.GeneratedMessage.Builder<Builder>
-				implements com.qfree.obotest.protobuf.PassageProtos.PassageOrBuilder {
+				implements com.qfree.obotest.protobuf.PassageTest1Protos.PassageOrBuilder {
       public static final com.google.protobuf.Descriptors.Descriptor
           getDescriptor() {
-				return com.qfree.obotest.protobuf.PassageProtos.internal_static_protobuf_test1_Passage_descriptor;
+				return com.qfree.obotest.protobuf.PassageTest1Protos.internal_static_protobuf_test1_Passage_descriptor;
       }
 
       protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
           internalGetFieldAccessorTable() {
-				return com.qfree.obotest.protobuf.PassageProtos.internal_static_protobuf_test1_Passage_fieldAccessorTable
+				return com.qfree.obotest.protobuf.PassageTest1Protos.internal_static_protobuf_test1_Passage_fieldAccessorTable
             .ensureFieldAccessorsInitialized(
-								com.qfree.obotest.protobuf.PassageProtos.Passage.class,
-								com.qfree.obotest.protobuf.PassageProtos.Passage.Builder.class);
+								com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1.class,
+								com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1.Builder.class);
       }
 
 			// Construct using com.qfree.obotest.eventsender.PassageProtos.Passage.newBuilder()
@@ -376,23 +376,23 @@ public final class PassageProtos {
 
       public com.google.protobuf.Descriptors.Descriptor
           getDescriptorForType() {
-				return com.qfree.obotest.protobuf.PassageProtos.internal_static_protobuf_test1_Passage_descriptor;
+				return com.qfree.obotest.protobuf.PassageTest1Protos.internal_static_protobuf_test1_Passage_descriptor;
       }
 
-			public com.qfree.obotest.protobuf.PassageProtos.Passage getDefaultInstanceForType() {
-				return com.qfree.obotest.protobuf.PassageProtos.Passage.getDefaultInstance();
+			public com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 getDefaultInstanceForType() {
+				return com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1.getDefaultInstance();
       }
 
-			public com.qfree.obotest.protobuf.PassageProtos.Passage build() {
-				com.qfree.obotest.protobuf.PassageProtos.Passage result = buildPartial();
+			public com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 build() {
+				com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 result = buildPartial();
         if (!result.isInitialized()) {
           throw newUninitializedMessageException(result);
         }
         return result;
       }
 
-			public com.qfree.obotest.protobuf.PassageProtos.Passage buildPartial() {
-				com.qfree.obotest.protobuf.PassageProtos.Passage result = new com.qfree.obotest.protobuf.PassageProtos.Passage(
+			public com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 buildPartial() {
+				com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 result = new com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1(
 						this);
         int from_bitField0_ = bitField0_;
         int to_bitField0_ = 0;
@@ -410,16 +410,16 @@ public final class PassageProtos {
       }
 
       public Builder mergeFrom(com.google.protobuf.Message other) {
-				if (other instanceof com.qfree.obotest.protobuf.PassageProtos.Passage) {
-					return mergeFrom((com.qfree.obotest.protobuf.PassageProtos.Passage) other);
+				if (other instanceof com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1) {
+					return mergeFrom((com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1) other);
         } else {
           super.mergeFrom(other);
           return this;
         }
       }
 
-			public Builder mergeFrom(com.qfree.obotest.protobuf.PassageProtos.Passage other) {
-				if (other == com.qfree.obotest.protobuf.PassageProtos.Passage.getDefaultInstance())
+			public Builder mergeFrom(com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 other) {
+				if (other == com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1.getDefaultInstance())
 					return this;
         if (other.hasImageName()) {
           bitField0_ |= 0x00000001;
@@ -441,11 +441,11 @@ public final class PassageProtos {
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-				com.qfree.obotest.protobuf.PassageProtos.Passage parsedMessage = null;
+				com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1 parsedMessage = null;
         try {
           parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
         } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-					parsedMessage = (com.qfree.obotest.protobuf.PassageProtos.Passage) e.getUnfinishedMessage();
+					parsedMessage = (com.qfree.obotest.protobuf.PassageTest1Protos.PassageTest1) e.getUnfinishedMessage();
           throw e;
         } finally {
           if (parsedMessage != null) {
@@ -570,7 +570,7 @@ public final class PassageProtos {
     }
 
     static {
-      defaultInstance = new Passage(true);
+      defaultInstance = new PassageTest1(true);
       defaultInstance.initFields();
     }
 

@@ -23,15 +23,15 @@ import com.qfree.obotest.rabbitmq.consume.HelperBean1;
 @LocalBean
 @Alternative
 @HelperBean1
-public class MessageConsumerHelperImageTestBean1 extends MessageConsumerHelperImageTest {
+public class RabbitMQConsumerHelperImageTestBean1 extends RabbitMQConsumerHelperImageTest {
 
-	public MessageConsumerHelperImageTestBean1() {
-		super();
-		/*
-		 * This field is used to enable the name of this subclass to be logged 
-		 * from its superclass.
-		 */
-		this.subClassName = this.getClass().getSimpleName();
-	}
+	//	public RabbitMQConsumerHelperImageTestBean1() {
+	//		super();
+	//		/*
+	//		 * This field is used to enable the name of this subclass to be logged 
+	//		 * from its superclass.
+	//		 */
+	//		this.subClassName = this.getClass().getSimpleName();
+	//	}
 
 }

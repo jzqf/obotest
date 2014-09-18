@@ -6,11 +6,11 @@ import javax.ejb.LocalBean;
 import javax.ejb.Singleton;
 import javax.enterprise.inject.Alternative;
 
-import com.qfree.obotest.rabbitmq.consume.HelperBean1;
+import com.qfree.obotest.rabbitmq.consume.HelperBean2;
 
 /*
  * This class is essentially identical to 
- * MessageConsumerHelperProtobufTest1Bean2.
+ * MessageConsumerHelperProtobufTest1Bean1.
  * 
  * Two identical classes are used to create two singleton session beans that 
  * can divide the workload between two separate MessageMQ consumer threads.
@@ -23,16 +23,16 @@ import com.qfree.obotest.rabbitmq.consume.HelperBean1;
 @Singleton
 @LocalBean
 @Alternative
-@HelperBean1
-public class MessageConsumerHelperProtobufTest1Bean1 extends MessageConsumerHelperProtobufTest1 {
+@HelperBean2
+public class RabbitMQConsumerHelperPassageTest1Bean2 extends RabbitMQConsumerHelperPassageTest1 {
 
-	public MessageConsumerHelperProtobufTest1Bean1() {
-		super();
-		/*
-		 * This field is used to enable the name of this subclass to be logged 
-		 * from its superclass.
-		 */
-		this.subClassName = this.getClass().getSimpleName();
-	}
+	//	public RabbitMQConsumerHelperPassageTest1Bean2() {
+	//		super();
+	//		/*
+	//		 * This field is used to enable the name of this subclass to be logged 
+	//		 * from its superclass.
+	//		 */
+	//		this.subClassName = this.getClass().getSimpleName();
+	//	}
 
 }

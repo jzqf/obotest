@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
-import com.qfree.obotest.protobuf.PassageProtos;
+import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -34,26 +34,26 @@ import com.rabbitmq.client.ShutdownSignalException;
  * 
  * One slight drawback of using a common base class is that all logging is
  * associated with this base class, not the particular EJB singleton class that
- * extends it. One way to get around this is to include:
+ * extends it. To get around this, the constructor for this class sets the field
+ * "subClassName" to
  * 
- *     this.getClass().getName()  or this.getClass().getSimpleName()
+ *     this.getClass().getSimpleName()
  * 
- * in the log message. To make this as efficient as possible, set the member
- * attribute "subClassName" to this value when an abject of a subclass is 
- * constructed.
+ * Then this field can be included in log messages to make it clear which 
+ * concrete subclass is logging the message.
  */
-public abstract class MessageConsumerHelperProtobufTest1 implements RabbitMQConsumerHelper {
+public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQConsumerHelper {
 
-	private static final Logger logger = LoggerFactory.getLogger(MessageConsumerHelperProtobufTest1.class);
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerHelperPassageTest1.class);
 
 	private static final String PASSAGE_QUEUE_NAME = "passage_queue_test1";
 	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 5000;
 
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
-	 * this class has been used to create a subclass. It is the duty of the 
-	 * subclass to set this field to this.getClass().getSimpleName() or to
-	 * this.getClass().getName(), probably in its constructor.
+	 * this class has been used to create a subclass. This field is set in the
+	 * constructor for this class, but it will be set to the name of the 
+	 * subclass if an instance of a subclass is constructed.
 	 */
 	String subClassName = null;
 
@@ -64,6 +64,16 @@ public abstract class MessageConsumerHelperProtobufTest1 implements RabbitMQCons
     @Inject
 	@PassageQualifier
 	Event<PassageTest1Event> passageEvent;
+
+	public RabbitMQConsumerHelperPassageTest1() {
+		/*
+		 * This will be the name of the subclass *if* an a an instance of a 
+		 * subclass is constructed. Currently, this class is abstract so an
+		 * object of this class will never be instantiate directly, but if this
+		 * were done, this field will contain the name of this class, of course.
+		 */
+		this.subClassName = this.getClass().getSimpleName();
+	}
 
 	public void openConnection() throws IOException {
 
@@ -120,7 +130,7 @@ public abstract class MessageConsumerHelperProtobufTest1 implements RabbitMQCons
 				/*
 				 * Processing here in this method.
 				 */
-				PassageProtos.Passage passage = PassageProtos.Passage.parseFrom(passageBytes);
+				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
 				byte[] imageBytes = passage.getImage().toByteArray();
 				logger.debug("[{}]:     Image name = '{}' ({} bytes)", subClassName, filename, imageBytes.length);
@@ -221,7 +231,7 @@ public abstract class MessageConsumerHelperProtobufTest1 implements RabbitMQCons
 
 		try {
 
-			PassageProtos.Passage passage = PassageProtos.Passage.parseFrom(passageBytes);
+			PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 			String filename = passage.getImageName();
 			byte[] imageBytes = passage.getImage().toByteArray();
 

@@ -12,10 +12,10 @@
 			@Alternative, alternatives *must* be specified here (there are no
 			default implementations that are not annotated with @Alternative).
 		-->
-<!-- 		<class>com.qfree.obotest.rabbitmq.consume.imagetest.MessageConsumerHelperImageTestBean1</class> -->
-<!-- 		<class>com.qfree.obotest.rabbitmq.consume.imagetest.MessageConsumerHelperImageTestBean2</class> -->
-		<class>com.qfree.obotest.rabbitmq.consume.passagetest1.MessageConsumerHelperProtobufTest1Bean1</class>
-		<class>com.qfree.obotest.rabbitmq.consume.passagetest1.MessageConsumerHelperProtobufTest1Bean2</class>
+<!-- 		<class>com.qfree.obotest.rabbitmq.consume.imagetest.RabbitMQConsumerHelperImageTestBean1</class> -->
+<!-- 		<class>com.qfree.obotest.rabbitmq.consume.imagetest.RabbitMQConsumerHelperImageTestBean2</class> -->
+		<class>com.qfree.obotest.rabbitmq.consume.passagetest1.RabbitMQConsumerHelperPassageTest1Bean1</class>
+		<class>com.qfree.obotest.rabbitmq.consume.passagetest1.RabbitMQConsumerHelperPassageTest1Bean2</class>
 		
 	</alternatives>
 

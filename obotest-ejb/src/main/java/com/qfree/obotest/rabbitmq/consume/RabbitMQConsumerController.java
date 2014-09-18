@@ -71,8 +71,8 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  */
 @Startup
 @DependsOn({
-		"MessageConsumerHelperImageTestBean1", "MessageConsumerHelperImageTestBean2",
-		"MessageConsumerHelperProtobufTest1Bean1", "MessageConsumerHelperProtobufTest1Bean2" })
+		"RabbitMQConsumerHelperImageTestBean1", "RabbitMQConsumerHelperImageTestBean2",
+		"RabbitMQConsumerHelperPassageTest1Bean1", "RabbitMQConsumerHelperPassageTest1Bean2" })
 @ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
 @Singleton
 @LocalBean
