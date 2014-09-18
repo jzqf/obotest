@@ -1,10 +1,12 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.rabbitmq.consume.imagetest;
 
 import javax.ejb.ConcurrencyManagement;
 import javax.ejb.ConcurrencyManagementType;
 import javax.ejb.LocalBean;
 import javax.ejb.Singleton;
 import javax.enterprise.inject.Alternative;
+
+import com.qfree.obotest.rabbitmq.consume.HelperBean1;
 
 /*
  * This class is essentially identical to MessageConsumerHelperImageTestBean2.
@@ -21,15 +23,15 @@ import javax.enterprise.inject.Alternative;
 @LocalBean
 @Alternative
 @HelperBean1
-public class MessageConsumerHelperImageTestBean1 extends MessageConsumerHelperImageTest {
+public class RabbitMQConsumerHelperImageTestBean1 extends RabbitMQConsumerHelperImageTest {
 
-	public MessageConsumerHelperImageTestBean1() {
-		super();
-		/*
-		 * This field is used to enable the name of this subclass to be logged 
-		 * from its superclass.
-		 */
-		this.subClassName = this.getClass().getSimpleName();
-	}
+	//	public RabbitMQConsumerHelperImageTestBean1() {
+	//		super();
+	//		/*
+	//		 * This field is used to enable the name of this subclass to be logged 
+	//		 * from its superclass.
+	//		 */
+	//		this.subClassName = this.getClass().getSimpleName();
+	//	}
 
 }

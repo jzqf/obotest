@@ -1,4 +1,4 @@
-package com.qfree.obotest.eventsender;
+package com.qfree.obotest.rabbitmq.consume.imagetest;
 
 import java.io.IOException;
 
@@ -12,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.ImageEvent;
+import com.qfree.obotest.eventlistener.ImageQualifier;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -29,26 +31,26 @@ import com.rabbitmq.client.ShutdownSignalException;
  * 
  * One slight drawback of using a common base class is that all logging is
  * associated with this base class, not the particular EJB singleton class that
- * extends it. One way to get around this is to include:
+ * extends it. To get around this, the constructor for this class sets the field
+ * "subClassName" to
  * 
- *     this.getClass().getName()  or this.getClass().getSimpleName()
+ *     this.getClass().getSimpleName()
  * 
- * in the log message. To make this as efficient as possible, set the member
- * attribute "subClassName" to this value when an abject of a subclass is 
- * constructed.
+ * Then this field can be included in log messages to make it clear which 
+ * concrete subclass is logging the message.
  */
-public abstract class MessageConsumerHelperImageTest implements MessageConsumerHelper {
+public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsumerHelper {
 
-	private static final Logger logger = LoggerFactory.getLogger(MessageConsumerHelperImageTest.class);
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerHelperImageTest.class);
 
 	private static final String IMAGE_QUEUE_NAME = "image_queue";
 	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 5000;
 
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
-	 * this class has been used to create a subclass. It is the duty of the 
-	 * subclass to set this field to this.getClass().getSimpleName() or to
-	 * this.getClass().getName(), probably in its constructor.
+	 * this class has been used to create a subclass. This field is set in the
+	 * constructor for this class, but it will be set to the name of the 
+	 * subclass if an instance of a subclass is constructed.
 	 */
 	String subClassName = null;
 
@@ -57,8 +59,18 @@ public abstract class MessageConsumerHelperImageTest implements MessageConsumerH
 	QueueingConsumer consumer = null;
 
     @Inject
-	@Image
+	@ImageQualifier
 	Event<ImageEvent> imageEvent;
+
+	public RabbitMQConsumerHelperImageTest() {
+		/*
+		 * This will be the name of the subclass *if* an a an instance of a 
+		 * subclass is constructed. Currently, this class is abstract so an
+		 * object of this class will never be instantiate directly, but if this
+		 * were done, this field will contain the name of this class, of course.
+		 */
+		this.subClassName = this.getClass().getSimpleName();
+	}
 
 	public void openConnection() throws IOException {
 

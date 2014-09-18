@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.ImageEvent;
-import com.qfree.obotest.eventsender.Image;
 
 @Stateless
 @LocalBean
@@ -26,7 +25,7 @@ public class ImageHandler implements Serializable {
 	}
 
 	@Asynchronous
-	public void processImage(@Observes @Image ImageEvent event) {
+	public void processImage(@Observes @ImageQualifier ImageEvent event) {
 		logger.debug("Start processing image: {}...", event.toString());
 		//		try {
 		//			Thread.sleep(1000);		// simulate doing some work
