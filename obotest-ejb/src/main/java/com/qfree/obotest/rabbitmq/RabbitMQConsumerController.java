@@ -35,7 +35,7 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * @Startup marks this bean for "eager initialization" during the application 
  * startup sequence.
  * 
- * @DependsOn is iportant here. It not only ensures that the singleton beans
+ * @DependsOn is important here. It not only ensures that the singleton beans
  * that are listed have been initialized before this singleton's PostConstruct 
  * method is called. This is probably not important because those beans that 
  * are used needed in threads started from this bean are injected below; this
@@ -44,7 +44,7 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * ensures that all singleton beans on with which this singleton has a DependsOn
  * relationship are still available during this singleton's PreDestroy method.
  * Testing has shown that if this @DependsOn annotation is not used, at least
- * one exception is thrown because one or nore of the dependent beans (the beans
+ * one exception is thrown because one or more of the dependent beans (the beans
  * that should be listed in the @DependsOn annotation) are destroyed early 
  * while the message consumer thread(s) is(are) shutting down. The exception 
  * that is thrown is:
@@ -66,7 +66,9 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * container, but we set is explicitly here anyway.
  */
 @Startup
-@DependsOn({ "MessageConsumerHelperImageTestBean1", "MessageConsumerHelperImageTestBean2" })
+@DependsOn({
+		"MessageConsumerHelperImageTestBean1", "MessageConsumerHelperImageTestBean2",
+		"MessageConsumerHelperProtobufTest1Bean1", "MessageConsumerHelperProtobufTest1Bean2" })
 @ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
 @Singleton
 @LocalBean
@@ -197,6 +199,16 @@ public class RabbitMQConsumerController {
 		Timer timer =
 				timerService.createSingleActionTimer(DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS, new TimerConfig());
 
+		//		if (messageConsumerHelperBean1 == null) {
+		//			logger.debug("messageConsumerHelperBean1 is null!");
+		//		} else {
+		//			logger.debug("messageConsumerHelperBean1 is not null");
+		//		}
+		//		if (messageConsumerHelperBean2 == null) {
+		//			logger.debug("messageConsumerHelperBean2 is null!");
+		//		} else {
+		//			logger.debug("messageConsumerHelperBean2 is not null");
+		//		}
 		//		if (messageConsumerHelperBean1 == messageConsumerHelperBean2) {
 		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are the same beans");
 		//		} else {
