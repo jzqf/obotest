@@ -138,7 +138,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			} else {
 
 				/*
-				 * Processing in another thread theat receives a CDI event that
+				 * Processing in another thread that receives a CDI event that
 				 * is sent from this thread.
 				 */
 
@@ -220,10 +220,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * 
 	 * TODO Investigate if/how we can get information on how the event was processed by the receiver.
 	 * 
-	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method?
+	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method????!!!
 	 * 
 	 */
-	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. i SHOULD PROBABLY REMOVE IT HERE AND IN THE OTHER CLASS
+	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. I SHOULD PROBABLY REMOVE IT HERE AND IN THE OTHER CLASS
 	@Asynchronous
 	@Lock(LockType.WRITE)
 	private void firePassageEvent(byte[] passageBytes) {

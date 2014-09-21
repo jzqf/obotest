@@ -16,7 +16,8 @@
 <!-- 		<class>com.qfree.obotest.rabbitmq.consume.imagetest.RabbitMQConsumerHelperImageTestBean2</class> -->
 		<class>com.qfree.obotest.rabbitmq.consume.passagetest1.RabbitMQConsumerHelperPassageTest1Bean1</class>
 		<class>com.qfree.obotest.rabbitmq.consume.passagetest1.RabbitMQConsumerHelperPassageTest1Bean2</class>
-		
+		<class>com.qfree.obotest.rabbitmq.produce.passagetest1.RabbitMQProducerHelperPassageTest1Bean1</class>
+		<class>com.qfree.obotest.rabbitmq.produce.passagetest1.RabbitMQProducerHelperPassageTest1Bean2</class>		
 	</alternatives>
 
 </beans>

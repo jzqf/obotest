@@ -26,6 +26,8 @@ import javax.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.qfree.obotest.rabbitmq.HelperBean1;
+import com.qfree.obotest.rabbitmq.HelperBean2;
 import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
 
 /*
@@ -101,7 +103,7 @@ public class RabbitMQConsumerController {
 	/*
 	 * The qualifiers @HelperBean1 & @HelperBean2 are needed here because the 
 	 * classes of both of the singleton EJB objects to be injected here 
-	 * implement the MessageConsumerHelper interface. One of these classes is 
+	 * implement the RabbitMQConsumerHelper interface. One of these classes is 
 	 * annotated with the qualifier @HelperBean1 and the other is annotated with
 	 * the qualifier @HelperBean2. This will ensure that each thread will get 
 	 * its own singleton helper EJB. This will reduce contention over sharing 
@@ -130,9 +132,9 @@ public class RabbitMQConsumerController {
 	// These are parallel lists (arrays could also be used). There will be one
 	// element in each list for each RabbitMQ consumer thread to be started from
 	// this singleton session bean.
-	List<RabbitMQConsumer> rabbitMQConsumers = null;
-	List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
-	List<Thread> rabbitMQConsumerThreads = null;
+	private List<RabbitMQConsumer> rabbitMQConsumers = null;
+	private List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
+	private List<Thread> rabbitMQConsumerThreads = null;
 
 	@Lock(LockType.READ)
 	public RabbitMQConsumerControllerStates getState() {
@@ -307,39 +309,6 @@ public class RabbitMQConsumerController {
 		}
 	}
 
-	@Lock(LockType.WRITE)
-	public void stop() {
-		logger.info("Request received to stop RabbitMQ consumer thread(s)");
-
-		this.setState(RabbitMQConsumerControllerStates.STOPPED);
-
-		/*
-		 * Signal the RabbitMQ consumer thread(s) so they can check the state
-		 * set in this thread to see if they should self-terminate.
-		 */
-		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-			if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
-				logger.debug("Interrupting the RabbitMQ consumer thread...");
-				rabbitMQConsumerThread.interrupt();
-			}
-		} else {
-			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-					if (rabbitMQConsumerThreads.get(threadIndex) != null
-							&& rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
-						logger.debug("Interrupting RabbitMQ consumer thread {}...", threadIndex);
-						rabbitMQConsumerThreads.get(threadIndex).interrupt();
-					}
-				} else {
-					logger.error(
-							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-							NUM_RABBITMQ_CONSUMER_THREADS);
-				}
-			}
-		}
-
-	}
-
 	@Schedule(second = "*/4", minute = "*", hour = "*")
 	@Lock(LockType.WRITE)
 	public void heartBeat() {
@@ -412,6 +381,39 @@ public class RabbitMQConsumerController {
 				}
 			}
 
+		}
+
+	}
+
+	@Lock(LockType.WRITE)
+	public void stop() {
+		logger.info("Request received to stop RabbitMQ consumer thread(s)");
+
+		this.setState(RabbitMQConsumerControllerStates.STOPPED);
+
+		/*
+		 * Signal the RabbitMQ consumer thread(s) so they can check the state
+		 * set in this thread to see if they should self-terminate.
+		 */
+		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
+			if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
+				logger.debug("Interrupting the RabbitMQ consumer thread...");
+				rabbitMQConsumerThread.interrupt();
+			}
+		} else {
+			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
+				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
+					if (rabbitMQConsumerThreads.get(threadIndex) != null
+							&& rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+						logger.debug("Interrupting RabbitMQ consumer thread {}...", threadIndex);
+						rabbitMQConsumerThreads.get(threadIndex).interrupt();
+					}
+				} else {
+					logger.error(
+							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
+							NUM_RABBITMQ_CONSUMER_THREADS);
+				}
+			}
 		}
 
 	}
