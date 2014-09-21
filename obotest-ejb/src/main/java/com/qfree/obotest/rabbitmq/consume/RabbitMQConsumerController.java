@@ -90,7 +90,7 @@ public class RabbitMQConsumerController {
 		STOPPED, RUNNING
 	};
 
-	private static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
+	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
 	//	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	
@@ -432,16 +432,20 @@ public class RabbitMQConsumerController {
 			if (rabbitMQConsumerThread != null) {
 				logger.debug("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
+					//TODO Make this 30000 ms a configurable parameter or a final static variable
 					rabbitMQConsumerThread.join(30000);	// Wait maximum 30 seconds
 				} catch (InterruptedException e) {
 				}
 			}
 		} else {
+			// TODO This is slightly more efficient and a little clearer.
+			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
 			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
 				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
 					if (rabbitMQConsumerThreads.get(threadIndex) != null) {
 						logger.debug("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
 						try {
+							//TODO Make this 30000 ms a configurable parameter or a final static variable
 							rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
 						} catch (InterruptedException e) {
 						}
@@ -491,5 +495,6 @@ public class RabbitMQConsumerController {
 		//		}
 
 		logger.info("RabbitMQ consumer controller will now be destroyed by the container");
+
 	}
 }

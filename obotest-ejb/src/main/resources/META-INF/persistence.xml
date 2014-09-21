@@ -6,7 +6,6 @@
 	<persistence-unit name="obotest-ejb">
 
 		<jta-data-source>jdbc/cookbookdb</jta-data-source>
-
 		<class>com.qfree.obotest.entity.City</class>
 		<class>com.qfree.obotest.entity.Country</class>
 		<class>com.qfree.obotest.entity.Zip</class>

@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.HelperBean1;
 import com.qfree.obotest.rabbitmq.HelperBean2;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerStates;
 import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
 
 /*
@@ -52,7 +54,8 @@ import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
  * container, but we set is explicitly here anyway.
  */
 @Startup
-@DependsOn({ "RabbitMQProducerHelperPassageTest1Bean1", "RabbitMQProducerHelperPassageTest1Bean2" })
+@DependsOn({ "RabbitMQConsumerController",
+		"RabbitMQProducerHelperPassageTest1Bean1", "RabbitMQProducerHelperPassageTest1Bean2" })
 @ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
 @Singleton
 @LocalBean
@@ -72,7 +75,7 @@ public class RabbitMQProducerController {
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_PRODUCER_MS = 2000;
 	private static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Make this smaller?
 	//	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
-	//	private static final long WAITING_LOOP_SLEEP_MS = 1000;
+	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	
 	/*
 	 * This queue holds the RabbitMQ messages waiting to be sent to a RabbitMQ
@@ -110,6 +113,9 @@ public class RabbitMQProducerController {
 	@Inject
 	@HelperBean2
 	RabbitMQProducerHelper messageProducerHelperBean2;	// used by the second thread
+
+	@Inject
+	RabbitMQConsumerController rabbitMQConsumerController;	// used in @PreDestroy
 
 	private volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
 
@@ -456,8 +462,118 @@ public class RabbitMQProducerController {
 	public void terminate() {
 		logger.info("Shutting down...");
 
-		//		logger.info("Start of terminate() method: messageProducerHelperBean1 = {}", messageProducerHelperBean1);
-		//		logger.info("Start of terminate() method: messageProducerHelperBean2 = {}", messageProducerHelperBean2);
+		/*
+		 * Request that the RabbitMQ consumer thread(s) be stopped. This call
+		 * is OK even if these threads have already been stopped.
+		 */
+		rabbitMQConsumerController.stop();
+
+		/*
+		 * The RabbitMQConsumerController bean is responsible for shutting 
+		 * itself down in its @PreDestroy method, but Tte @PreDestroy method of
+		 * the RabbitMQConsumerController bean will not run until *after* this
+		 * RabbitMQProducerController bean is destroyed by the container (due to
+		 * the dependency set in the @DependsOn annotation above). Therefore, it
+		 * is not possible to check that the message consumer threads have 
+		 * terminated by setting some sort "DESTROYED" state for the 
+		 * @PreDestroy method of the RabbitMQConsumerController bean in. But it
+		 * is possible to check that the message consumer threads have 
+		 * terminated by calling one of:
+		 * 
+		 *     RabbitMQConsumerController.getConsumerState()
+		 *     RabbitMQConsumerController.getConsumerState(int threadIndex)
+		 * 
+		 * so this is done here:
+		 */
+		long loopTime = 0;
+		if (rabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
+			while (rabbitMQConsumerController.getConsumerState() != RabbitMQConsumerStates.STOPPED) {
+				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
+				loopTime = +WAITING_LOOP_SLEEP_MS;
+				try {
+					Thread.sleep(WAITING_LOOP_SLEEP_MS);
+				} catch (InterruptedException e) {
+				}
+				//TODO Make this 30000 ms a configurable parameter or a final static variable
+				if (loopTime >= 30000) {
+					logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
+					break;
+				}
+			}
+			logger.debug("The consumer thread has terminated");
+		} else {
+			for (int threadIndex = 0; threadIndex < rabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
+				while (rabbitMQConsumerController.getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
+					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
+					loopTime = +WAITING_LOOP_SLEEP_MS;
+					try {
+						Thread.sleep(WAITING_LOOP_SLEEP_MS);
+					} catch (InterruptedException e) {
+					}
+					//TODO Make this 30000 ms a configurable parameter or a final static variable
+					if (loopTime >= 30000) {
+						logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
+						break;
+					}
+				}
+			}
+			logger.debug("The {} consumer threads have terminated",
+					rabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
+		}
+
+		//		while (rabbitMQConsumerController.getState() != RabbitMQConsumerController.RabbitMQConsumerControllerStates.DESTROYED) {
+		//			logger.debug("rabbitMQConsumerController.getState() = {}", rabbitMQConsumerController.getState());
+		//			try {
+		//				logger.debug("Sleeping {} ms waiting for the state of the {} bean to become {}",
+		//						RabbitMQConsumerController.class.getSimpleName(),
+		//						RabbitMQConsumerController.RabbitMQConsumerControllerStates.DESTROYED);
+		//				Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//			} catch (InterruptedException e) {
+		//			}
+		//		}
+
+		/* 
+		 * Now that the consumer thread(s) are terminated, the 
+		 * messageBlockingQueue can now empty. There will be no new incoming 
+		 * messages to process, but those that are currently being processed
+		 * must be given enough time to finish processing and place their 
+		 * outgoing message in the queue. These remain messages will be sent
+		 * by the producer thread(s), and eventually the queue should become
+		 * empty. After this occurs, the producer thread(s) can be terminated, 
+		 * and then this @PreDestroy method can be allowed to finish. But we 
+		 * must ensure that the producer thread(s) is(are) running so that the
+		 * blocking queue can be emptied. We check for that can start it(them), 
+		 * if necessary.
+		 */
+		if (messageBlockingQueue.size() > 0) {
+			logger.debug("Waiting for the messageBlockingQueue queue to empty...");
+			//TODO Is this a good enough test here that the producer thread(s) really are running?
+			if (this.getState() != RabbitMQProducerControllerStates.RUNNING) {
+				this.start();
+			}
+		}
+		loopTime = 0;
+		while (messageBlockingQueue.size() > 0) {
+			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
+					messageBlockingQueue.size());
+			loopTime = +WAITING_LOOP_SLEEP_MS;
+			try {
+				Thread.sleep(WAITING_LOOP_SLEEP_MS);
+			} catch (InterruptedException e) {
+			}
+			//TODO Make this 30000 ms a configurable parameter or a final static variable
+			if (loopTime >= 30000) {
+				logger.debug("Timeout waiting for messageBlockingQueue to empty");
+				break;
+			}
+		}
+		if (messageBlockingQueue.size() == 0) {
+			logger.debug("The messageBlockingQueue queue is empty. The producer threads will new be stopped.");
+		} else {
+			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
+					messageBlockingQueue.size());
+		}
+		logger.debug("The producer threads will now be stopped.");
 
 		this.stop();
 
@@ -466,16 +582,20 @@ public class RabbitMQProducerController {
 			if (rabbitMQProducerThread != null) {
 				logger.debug("Waiting for RabbitMQ producer thread to terminate...");
 				try {
+					//TODO Make this 30000 ms a configurable parameter or a final static variable
 					rabbitMQProducerThread.join(30000);	// Wait maximum 30 seconds
 				} catch (InterruptedException e) {
 				}
 			}
 		} else {
+			// TODO This is slightly more efficient and a little clearer.
+			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
 			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
 				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
 					if (rabbitMQProducerThreads.get(threadIndex) != null) {
 						logger.debug("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
 						try {
+							//TODO Make this 30000 ms a configurable parameter or a final static variable
 							rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
 						} catch (InterruptedException e) {
 						}
