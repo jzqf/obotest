@@ -478,135 +478,93 @@ public class RabbitMQProducerController {
 		logger.info("Waiting for the messageBlockingQueue queue to empty...");
 		waitForRabbitMQProducerQueueToEmpty();
 
-		//		//TODO Turn this block of code into a method to make things look simpler: waitForRabbitMQProducerQueueToEmpty() ?
-		//		//		if (messageBlockingQueue.size() > 0) {
-		//		//			//TODO Is this a good enough test here that the producer thread(s) really are running?
-		//		//			//			if (this.getState() != RabbitMQProducerControllerStates.RUNNING) {
-		//		//			this.start();
-		//		//			//			}
-		//		//		}
-		//		long loopTime = 0;
-		//		while (messageBlockingQueue.size() > 0) {
-		//
-		//			/*
-		//			 * The start() method for the producer threads is called repeatedly
-		//			 * in this loop. This is to ensure that these threads keep running
-		//			 * while we wait for the queue to empty. There is no known reason
-		//			 * why this should be be necessary - this is just defensive
-		//			 * programming to handle the unlikely case where, from somewhere,
-		//			 * a request come in to shut down these threads while we are waiting
-		//			 * for the queue to empty.
-		//			 */
-		//			//TODO This does not handle the case where we *want* to shut down without emptying the queue, but will this ever be needed?
-		//			this.start();
-		//
-		//			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
-		//					messageBlockingQueue.size());
-		//
-		//			loopTime = +WAITING_LOOP_SLEEP_MS;
-		//			try {
-		//				Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//			} catch (InterruptedException e) {
-		//			}
-		//
-		//			//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//			if (loopTime >= 30000) {
-		//				logger.debug("Timeout waiting for messageBlockingQueue to empty");
-		//				break;
-		//			}
-		//
-		//		}
-		//		if (messageBlockingQueue.size() == 0) {
-		//			logger.debug("The messageBlockingQueue queue is empty. The producer threads will new be stopped.");
-		//		} else {
-		//			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
-		//					messageBlockingQueue.size());
-		//		}
-		
-
 		/*
 		 * Now that the blocking queue that is is used to hold outgoing messages
 		 * is empty, the producer thread(s) can be terminated.
 		 */
 		logger.info("Stopping the RabbitMQ producer threads...");
+		stopProducerThreadsAndWaitForTermination();
 
-		stop();// TODO place in / stopProducerThreadsAndWaitForTermination() (call repeatedly)
+		//		stop();// TODO place in / stopProducerThreadsAndWaitForTermination() (call repeatedly)
 
-		// Wait for the producer thread(s) to terminate.
-		//TODO Turn this into a method, to make this look cleaner and less "scary"?
-		// / stopProducerThreadsAndWaitForTermination() / waitForRabbitMQProducer(Threads)ToStop() / stopRabbitMQProducer(Threads)()
-		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-			if (rabbitMQProducerThread != null) {
-				logger.debug("Waiting for RabbitMQ producer thread to terminate...");
-				try {
-					//TODO Make this 30000 ms a configurable parameter or a final static variable
-					rabbitMQProducerThread.join(30000);	// Wait maximum 30 seconds
-				} catch (InterruptedException e) {
-				}
-			}
-		} else {
-			// TODO This is slightly more efficient and a little clearer.
-			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
-			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-					if (rabbitMQProducerThreads.get(threadIndex) != null) {
-						logger.debug("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
-						try {
-							//TODO Make this 30000 ms a configurable parameter or a final static variable
-							rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
-						} catch (InterruptedException e) {
-						}
-					}
-				} else {
-					logger.error(
-							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
-							NUM_RABBITMQ_PRODUCER_THREADS);
-				}
-			}
-		}
-
-		//		logger.info("End of terminate() method: messageProducerHelperBean1 = {}", messageProducerHelperBean1);
-		//		logger.info("End of terminate() method: messageProducerHelperBean2 = {}", messageProducerHelperBean2);
-
-		//		long loopTime = 0;
+		//		// Wait for the producer thread(s) to terminate.
+		//		//TODO Turn this into a method, to make this look cleaner and less "scary"?
+		//		// / stopProducerThreadsAndWaitForTermination() / waitForRabbitMQProducer(Threads)ToStop() / stopRabbitMQProducer(Threads)()
 		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-		//			while (this.getProducerState() != RabbitMQProducerStates.STOPPED) {
-		//				logger.debug("Waiting for RabbitMQ producer thread to quit...");
-		//				loopTime = +WAITING_LOOP_SLEEP_MS;
+		//			if (rabbitMQProducerThread != null) {
+		//				stop();	// call repeatedly, just in case
+		//				logger.debug("Waiting for RabbitMQ producer thread to terminate...");
 		//				try {
-		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//					//TODO Make this 30000 ms a configurable parameter or a final static variable
+		//					rabbitMQProducerThread.join(30000);	// Wait maximum 30 seconds
 		//				} catch (InterruptedException e) {
-		//				}
-		//				// Wait maximum 60 seconds.
-		//				if (loopTime >= 60000) {
-		//					logger.debug("Timeout waiting for RabbitMQ producer thread to quit");
-		//					break;
 		//				}
 		//			}
 		//		} else {
+		//			// TODO This is slightly more efficient and a little clearer.
+		//			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
 		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-		//				while (this.getProducerState(threadIndex) != RabbitMQProducerStates.STOPPED) {
-		//					logger.debug("Waiting for RabbitMQ producer thread {} to quit...", threadIndex);
-		//					loopTime = +WAITING_LOOP_SLEEP_MS;
-		//					try {
-		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//					} catch (InterruptedException e) {
+		//				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
+		//					if (rabbitMQProducerThreads.get(threadIndex) != null) {
+		//						stop();	// call repeatedly, just in case
+		//						logger.debug("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
+		//						try {
+		//							//TODO Make this 30000 ms a configurable parameter or a final static variable
+		//							rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+		//						} catch (InterruptedException e) {
+		//						}
 		//					}
-		//					// Wait maximum 60 seconds.
-		//					if (loopTime >= 60000) {
-		//						logger.debug("Timeout waiting for RabbitMQ producer thread to quit");
-		//						break;
-		//					}
+		//				} else {
+		//					logger.error(
+		//							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
+		//							NUM_RABBITMQ_PRODUCER_THREADS);
 		//				}
 		//			}
 		//		}
+		//
+		//		//		logger.info("End of terminate() method: messageProducerHelperBean1 = {}", messageProducerHelperBean1);
+		//		//		logger.info("End of terminate() method: messageProducerHelperBean2 = {}", messageProducerHelperBean2);
+		//
+		//		//		long loopTime = 0;
+		//		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
+		//		//			while (this.getProducerState() != RabbitMQProducerStates.STOPPED) {
+		//		//				logger.debug("Waiting for RabbitMQ producer thread to quit...");
+		//		//				loopTime = +WAITING_LOOP_SLEEP_MS;
+		//		//				try {
+		//		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//		//				} catch (InterruptedException e) {
+		//		//				}
+		//		//				// Wait maximum 60 seconds.
+		//		//				if (loopTime >= 60000) {
+		//		//					logger.debug("Timeout waiting for RabbitMQ producer thread to quit");
+		//		//					break;
+		//		//				}
+		//		//			}
+		//		//		} else {
+		//		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
+		//		//				while (this.getProducerState(threadIndex) != RabbitMQProducerStates.STOPPED) {
+		//		//					logger.debug("Waiting for RabbitMQ producer thread {} to quit...", threadIndex);
+		//		//					loopTime = +WAITING_LOOP_SLEEP_MS;
+		//		//					try {
+		//		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//		//					} catch (InterruptedException e) {
+		//		//					}
+		//		//					// Wait maximum 60 seconds.
+		//		//					if (loopTime >= 60000) {
+		//		//						logger.debug("Timeout waiting for RabbitMQ producer thread to quit");
+		//		//						break;
+		//		//					}
+		//		//				}
+		//		//			}
+		//		//		}
 
 		logger.info("RabbitMQ producer controller will now be destroyed by the container");
 	}
 
 	/**
-	 * 
+	 * Waits for the outgoing message queue to become empty.
 	 */
+	@Lock(LockType.WRITE)
 	private void waitForRabbitMQProducerQueueToEmpty() {
 
 		long loopTime = 0;
@@ -647,6 +605,85 @@ public class RabbitMQProducerController {
 			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
 					messageBlockingQueue.size());
 		}
+
+	}
+
+	/**
+	 * Stops the RabbitMQ producer thread(s) and then wait for it(them) to 
+	 * terminate.
+	 */
+	@Lock(LockType.WRITE)
+	private void stopProducerThreadsAndWaitForTermination() {
+
+		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
+			if (rabbitMQProducerThread != null) {
+				stop();	// call repeatedly, just in case
+				logger.debug("Waiting for RabbitMQ producer thread to terminate...");
+				try {
+					//TODO Make this 30000 ms a configurable parameter or a final static variable
+					rabbitMQProducerThread.join(30000);	// Wait maximum 30 seconds
+				} catch (InterruptedException e) {
+				}
+			}
+		} else {
+			// TODO This is slightly more efficient and a little clearer.
+			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
+			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
+				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
+					if (rabbitMQProducerThreads.get(threadIndex) != null) {
+						stop();	// call repeatedly, just in case
+						logger.debug("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
+						try {
+							//TODO Make this 30000 ms a configurable parameter or a final static variable
+							rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+						} catch (InterruptedException e) {
+						}
+					}
+				} else {
+					logger.error(
+							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
+							NUM_RABBITMQ_PRODUCER_THREADS);
+				}
+			}
+		}
+
+		// Another way of doing this that checks the "producer state" instead
+		// of checking directly that the thread(s) has(have) terminated.:
+
+		//		long loopTime = 0;
+		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
+		//			while (this.getProducerState() != RabbitMQProducerStates.STOPPED) {
+		//				stop();	// call repeatedly, just in case
+		//				logger.debug("Waiting for RabbitMQ producer thread to quit...");
+		//				loopTime = +WAITING_LOOP_SLEEP_MS;
+		//				try {
+		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//				} catch (InterruptedException e) {
+		//				}
+		//				// Wait maximum 60 seconds.
+		//				if (loopTime >= 60000) {
+		//					logger.debug("Timeout waiting for RabbitMQ producer thread to quit");
+		//					break;
+		//				}
+		//			}
+		//		} else {
+		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
+		//				while (this.getProducerState(threadIndex) != RabbitMQProducerStates.STOPPED) {
+		//				stop();	// call repeatedly, just in case
+		//					logger.debug("Waiting for RabbitMQ producer thread {} to quit...", threadIndex);
+		//					loopTime = +WAITING_LOOP_SLEEP_MS;
+		//					try {
+		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//					} catch (InterruptedException e) {
+		//					}
+		//					// Wait maximum 60 seconds.
+		//					if (loopTime >= 60000) {
+		//						logger.debug("Timeout waiting for RabbitMQ producer thread to quit");
+		//						break;
+		//					}
+		//				}
+		//			}
+		//		}
 
 	}
 }

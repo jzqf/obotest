@@ -476,7 +476,8 @@ public class RabbitMQConsumerController {
 	}
 
 	/**
-	 * Stops the consumer thread(s) and then wait for it(them) to terminate.
+	 * Stops the RabbitMQconsumer thread(s) and then wait for it(them) to 
+	 * terminate.
 	 */
 	@Lock(LockType.WRITE)
 	public void stopConsumerThreadsAndWaitForTermination() {
