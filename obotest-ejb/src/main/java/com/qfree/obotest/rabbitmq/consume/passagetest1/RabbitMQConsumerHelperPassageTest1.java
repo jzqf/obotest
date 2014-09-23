@@ -193,7 +193,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 * waiting the timeout period. This in perfectly normal. The 
 			 * timeout is implemented so that the calling thread can check 
 			 * whether there has been a request made for it to terminate or 
-			 * whatever. 
+			 * whatever, even if this thread is not interrupted. 
 			 */
 			logger.trace("[{}]: consumer.nextDelivery() timed out after {} ms",
 					subClassName, RABBITMQ_CONSUMER_TIMEOUT_MS);

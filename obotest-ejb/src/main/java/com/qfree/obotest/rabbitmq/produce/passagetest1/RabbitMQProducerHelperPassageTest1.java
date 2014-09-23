@@ -117,9 +117,9 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 
 	@Override
 	//TODO Should we set this.messageBlockingQueue via a setter instead of this method?
-	// If so, then we can eliminate or rename this configureProducer() method.
+	// If so, then we can consider eliminating or renaming this configureProducer() method.
 	public void configureProducer(BlockingQueue<byte[]> messageBlockingQueue) {
-		logger.debug("[{}]: Setting the blocking queue that will ne used by this producer thread: {}", subClassName,
+		logger.debug("[{}]: Setting the blocking queue that will be used by this producer thread: {}", subClassName,
 				messageBlockingQueue);
 		this.messageBlockingQueue = messageBlockingQueue;
 	}
@@ -143,8 +143,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
 				logger.debug("[{}]: Published RabbitMQ passage message", subClassName);
 
-				logger.debug("[{}]: Sleeping for 1000 ms...", subClassName);
-				Thread.sleep(1000);
+				logger.debug("[{}]: Sleeping for 10 ms...", subClassName);
+				Thread.sleep(10);
 
 			} else {
 				/*
@@ -152,7 +152,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				 * publish after waiting the timeout period. This in perfectly 
 				 * normal. The timeout is implemented so that the calling thread
 				 * can check whether there has been a request made for it to 
-				 * terminate or whatever. 
+				 * terminate or whatever, even if this thread is not 
+				 * interrupted. 
 				 */
 				logger.trace("[{}]: messageBlockingQueue.poll() timed out after {} ms",
 						subClassName, RABBITMQ_PRODUCER_TIMEOUT_MS);

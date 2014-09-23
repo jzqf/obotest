@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
 @Stateless
@@ -28,6 +29,9 @@ public class PassageTest1Handler implements Serializable {
 	private static final Logger logger = LoggerFactory.getLogger(PassageTest1Handler.class);
 
 	@Inject
+	private RabbitMQConsumerController rabbitMQConsumerController;
+
+	@Inject
 	private RabbitMQProducerController rabbitMQProducerController;
 
 	public PassageTest1Handler() {
@@ -37,8 +41,20 @@ public class PassageTest1Handler implements Serializable {
 	@Asynchronous
 	public void processPassage(@Observes @PassageQualifier PassageTest1Event event) {
 
+		/*
+		 * TODO Attempt to increase semaphore count by one (acquire a permit).
+		 * If successful:
+		 * 		* start "try" block. 
+		 * 		* Log the number of permits in use.
+		 * 		* Release semaphore in "finally" block
+		 * If semaphore permit *not* acquired, (hopefully, this will never happen):
+		 * 		* Log a warning or error because the message/passage will be
+		 * 		  lost unless we can think of something sensible to do with it.
+		 */
+
 		logger.debug("Start processing passage: {}...", event.toString());
 		//		try {
+		//			logger.debug("Sleeping for 1000 ms to simulate doing some work...");
 		//			Thread.sleep(1000);		// simulate doing some work
 		//		} catch (InterruptedException e) {
 		//		}
@@ -57,12 +73,16 @@ public class PassageTest1Handler implements Serializable {
 
 		/*
 		 * Queue the message for publishing to a RabbitMQ broker. The actual
-		 * publishing will be performed in a RabbitMQ prooducer background
+		 * publishing will be performed in a RabbitMQ producer background
 		 * thread.
 		 */
 		logger.debug("Queuing message for delivery [{} bytes]", passageBytes.length);
-		//TODO Remember that success here only means that the message was queued for delivery, not that is *was* delivered!
-		// Should we try to follow up that the message *was* delivered successfully? If so, what should be done in that case?
+		/*
+		 * Remember that success here only means that the message was queued for
+		 * delivery, not that is *was* delivered!
+		 * TODO Should we try to follow up that the message *was* delivered successfully?
+		 * If so, what should be done in that case?
+		 */
 		boolean success = this.send(passageBytes);
 		if (success) {
 			logger.debug("Message successfully queued.");
@@ -98,14 +118,11 @@ public class PassageTest1Handler implements Serializable {
 				success = messageBlockingQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 			} catch (InterruptedException e) {
 				//TODO Can we ensure that the message to be queued, i.e., "bytes", is not lost?
-				logger.debug(
-						"\n********************"
-								+
-								"\nInterruptedException caught while waiting to offer a message to the blocking queue. "
-								+
-								"\nPerhaps a request has been made to stop the RabbitMQ producer thread(s)?" +
-								"\nCan we ensure that the message to be queued, ie.e., \"bytes\", is not lost?" +
-								"\n********************");
+				logger.warn("\n********************" +
+						"\nInterruptedException caught while waiting to offer a message to the queue. " +
+						"\nPerhaps a request has been made to stop the RabbitMQ producer thread(s)?" +
+						"\nCan we ensure that the message to be queued is not lost?" +
+						"\n********************");
 			}
 			if (success) {
 				logger.debug("Message successfully entered into producer blocking queue.");
