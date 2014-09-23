@@ -424,72 +424,6 @@ public class RabbitMQProducerController {
 	public void terminate() {
 		logger.info("Shutting down...");
 
-		//		/*
-		//		 * Request that the RabbitMQ consumer thread(s) be stopped. This call
-		//		 * is OK even if these threads have already been stopped.
-		//		 */
-		//		//TODO Move this in to waitForRabbitMQConsumer(Threads)ToStop() / stopRabbitMQConsumer(Threads)() ? Call repeatedly.
-		//		rabbitMQConsumerController.stop();
-		//
-		//		/*
-		//		 * Wait for the RabbitMQ message consumer thread(s) to terminate.
-		//		 * 
-		//		 * The RabbitMQConsumerController bean is responsible for shutting 
-		//		 * itself down in its @PreDestroy method, but the @PreDestroy method of
-		//		 * the RabbitMQConsumerController bean will not run until *after* this
-		//		 * RabbitMQProducerController bean is destroyed by the container (due to
-		//		 * the dependency set in the @DependsOn annotation above). Therefore, it
-		//		 * is not possible to check that the message consumer threads have 
-		//		 * terminated by setting some sort "DESTROYED" state for the 
-		//		 * @PreDestroy method of the RabbitMQConsumerController bean in. But it
-		//		 * is possible to check that the message consumer threads have 
-		//		 * terminated by calling one of:
-		//		 * 
-		//		 *     RabbitMQConsumerController.getConsumerState()
-		//		 *     RabbitMQConsumerController.getConsumerState(int threadIndex)
-		//		 * 
-		//		 * so this is done here:
-		//		 */
-		//		//TODO Turn this into a method, to make this look cleaner and less "scary"? 
-		//		// waitForRabbitMQConsumer(Threads)ToStop() / stopRabbitMQConsumer(Threads)()
-		//		// !!!!!!!!!!!!!!!!!!!!!!!! If so,should this actually be a method of RabbitMQConsumerController? AT LEAST TEST THIS !!!!!!!!!!!!!!!!!!!!!!!!!
-		//		// Then we can execute here, e.g.:  rabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination()
-		//		long loopTime = 0;
-		//		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-		//			while (rabbitMQConsumerController.getConsumerState() != RabbitMQConsumerStates.STOPPED) {
-		//				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
-		//				loopTime = +WAITING_LOOP_SLEEP_MS;
-		//				try {
-		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//				} catch (InterruptedException e) {
-		//				}
-		//				//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//				if (loopTime >= 30000) {
-		//					logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//					break;
-		//				}
-		//			}
-		//			logger.debug("The consumer thread has terminated");
-		//		} else {
-		//			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-		//				while (rabbitMQConsumerController.getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
-		//					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
-		//					loopTime = +WAITING_LOOP_SLEEP_MS;
-		//					try {
-		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//					} catch (InterruptedException e) {
-		//					}
-		//					//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//					if (loopTime >= 30000) {
-		//						logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//						break;
-		//					}
-		//				}
-		//			}
-		//			logger.debug("The {} consumer threads have terminated",
-		//					rabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
-		//		}
-
 		/*
 		 * Stop the RabbitMQ consumer thread(s) and then wait for them to 
 		 * terminate.
@@ -501,9 +435,20 @@ public class RabbitMQProducerController {
 		 * the dependency set in the @DependsOn annotation above). Therefore, 
 		 * we force the consumer threads to stop here:
 		 */
+		logger.info("Waiting for the consumer threads to terminate...");
 		rabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination();
 
 		/*
+		 * Now that the consumer thread(s) are terminated, there will be no new
+		 * incoming messages to process, but those that are currently being 
+		 * processed by the message handler threads must be given enough time to
+		 * finish their processing and place their outgoing message in the 
+		 * outgoing message queue. 
+		 * 
+		 * 
+		 * 
+		 * 
+		 * 
 		 * TODO We need to check here if any of the message handlers are processing a message that _will be_ added to the queue!
 		 *  Can we do this somehow? This can be tested by uncommenting the 1 second delay in the handler.
 		 *  1. We can wait here for a fixed period after the consumer threads have terminated and before we check the queue size here.
@@ -523,68 +468,69 @@ public class RabbitMQProducerController {
 		 * 		monitor the instantaneous number of threads processing consumed messages.
 		 */
 
-		logger.debug("Waiting for the messageBlockingQueue queue to empty...");
-
 		/* 
-		 * Now that the consumer thread(s) are terminated, the 
-		 * messageBlockingQueue can now empty. There will be no new incoming 
-		 * messages to process, but those that are currently being processed
-		 * must be given enough time to finish processing and place their 
-		 * outgoing message in the queue. These remain messages will be sent
-		 * by the producer thread(s), and eventually the queue should become
-		 * empty. After this occurs, the producer thread(s) can be terminated, 
-		 * and then this @PreDestroy method can be allowed to finish. But we 
-		 * must ensure that the producer thread(s) is(are) running so that the
-		 * blocking queue can be emptied.
+		 * Now that the consumer thread(s) are terminated and, in addition, all
+		 * message handler threads have finished processing their coming 
+		 * messages, the outgoing message queue can can be allowed to empty as
+		 * the messages in this queue are published by the RabbitMQ producer 
+		 * threads.
 		 */
-		//TODO Turn this block of code into a method to make things look simpler: waitForRabbitMQProducerQueueToEmpty() ?
-		//		if (messageBlockingQueue.size() > 0) {
-		//			//TODO Is this a good enough test here that the producer thread(s) really are running?
-		//			//			if (this.getState() != RabbitMQProducerControllerStates.RUNNING) {
+		logger.info("Waiting for the messageBlockingQueue queue to empty...");
+		waitForRabbitMQProducerQueueToEmpty();
+
+		//		//TODO Turn this block of code into a method to make things look simpler: waitForRabbitMQProducerQueueToEmpty() ?
+		//		//		if (messageBlockingQueue.size() > 0) {
+		//		//			//TODO Is this a good enough test here that the producer thread(s) really are running?
+		//		//			//			if (this.getState() != RabbitMQProducerControllerStates.RUNNING) {
+		//		//			this.start();
+		//		//			//			}
+		//		//		}
+		//		long loopTime = 0;
+		//		while (messageBlockingQueue.size() > 0) {
+		//
+		//			/*
+		//			 * The start() method for the producer threads is called repeatedly
+		//			 * in this loop. This is to ensure that these threads keep running
+		//			 * while we wait for the queue to empty. There is no known reason
+		//			 * why this should be be necessary - this is just defensive
+		//			 * programming to handle the unlikely case where, from somewhere,
+		//			 * a request come in to shut down these threads while we are waiting
+		//			 * for the queue to empty.
+		//			 */
+		//			//TODO This does not handle the case where we *want* to shut down without emptying the queue, but will this ever be needed?
 		//			this.start();
-		//			//			}
+		//
+		//			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
+		//					messageBlockingQueue.size());
+		//
+		//			loopTime = +WAITING_LOOP_SLEEP_MS;
+		//			try {
+		//				Thread.sleep(WAITING_LOOP_SLEEP_MS);
+		//			} catch (InterruptedException e) {
+		//			}
+		//
+		//			//TODO Make this 30000 ms a configurable parameter or a final static variable
+		//			if (loopTime >= 30000) {
+		//				logger.debug("Timeout waiting for messageBlockingQueue to empty");
+		//				break;
+		//			}
+		//
 		//		}
-		long loopTime = 0;
-		while (messageBlockingQueue.size() > 0) {
-
-			/*
-			 * The start() method for the producer threads is called repeatedly
-			 * in this loop. This is to ensure that these threads keep running
-			 * while we wait for the queue to empty. There is no known reason
-			 * why this should be be necessary - this is just defensive
-			 * programming to handle the unlikely case where, from somewhere,
-			 * a request come in to shut down these threads while we are waiting
-			 * for the queue to empty.
-			 */
-			//TODO This does not handle the case where we *want* to shut down without emptying the queue, but will this ever be needed?
-			this.start();
-
-			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
-					messageBlockingQueue.size());
-
-			loopTime = +WAITING_LOOP_SLEEP_MS;
-			try {
-				Thread.sleep(WAITING_LOOP_SLEEP_MS);
-			} catch (InterruptedException e) {
-			}
-
-			//TODO Make this 30000 ms a configurable parameter or a final static variable
-			if (loopTime >= 30000) {
-				logger.debug("Timeout waiting for messageBlockingQueue to empty");
-				break;
-			}
-
-		}
-		if (messageBlockingQueue.size() == 0) {
-			logger.debug("The messageBlockingQueue queue is empty. The producer threads will new be stopped.");
-		} else {
-			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
-					messageBlockingQueue.size());
-		}
+		//		if (messageBlockingQueue.size() == 0) {
+		//			logger.debug("The messageBlockingQueue queue is empty. The producer threads will new be stopped.");
+		//		} else {
+		//			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
+		//					messageBlockingQueue.size());
+		//		}
 		
-		logger.debug("The producer threads will now be stopped.");
 
-		this.stop();// TODO place in / stopProducerThreadsAndWaitForTermination() (call repeatedly)
+		/*
+		 * Now that the blocking queue that is is used to hold outgoing messages
+		 * is empty, the producer thread(s) can be terminated.
+		 */
+		logger.info("Stopping the RabbitMQ producer threads...");
+
+		stop();// TODO place in / stopProducerThreadsAndWaitForTermination() (call repeatedly)
 
 		// Wait for the producer thread(s) to terminate.
 		//TODO Turn this into a method, to make this look cleaner and less "scary"?
@@ -656,5 +602,51 @@ public class RabbitMQProducerController {
 		//		}
 
 		logger.info("RabbitMQ producer controller will now be destroyed by the container");
+	}
+
+	/**
+	 * 
+	 */
+	private void waitForRabbitMQProducerQueueToEmpty() {
+
+		long loopTime = 0;
+		while (messageBlockingQueue.size() > 0) {
+
+			/*
+			 * The start() method for the producer threads is called repeatedly
+			 * in this loop. This is to ensure that these threads keep running
+			 * while we wait for the queue to empty. There is no known reason
+			 * why this should be be necessary - this is just defensive
+			 * programming to handle the unlikely case where, from somewhere,
+			 * a request come in to shut down these threads while we are waiting
+			 * for the queue to empty.
+			 */
+			//TODO This does not handle the case where we *want* to shut down without emptying the queue, but will this ever be needed?
+			this.start();
+
+			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
+					messageBlockingQueue.size());
+
+			loopTime = +WAITING_LOOP_SLEEP_MS;
+			try {
+				Thread.sleep(WAITING_LOOP_SLEEP_MS);
+			} catch (InterruptedException e) {
+			}
+
+			//TODO Make this 30000 ms a configurable parameter or a final static variable
+			if (loopTime >= 30000) {
+				logger.debug("Timeout waiting for messageBlockingQueue to empty");
+				break;
+			}
+
+		}
+
+		if (messageBlockingQueue.size() == 0) {
+			logger.debug("The messageBlockingQueue queue is empty. The producer threads will new be stopped.");
+		} else {
+			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
+					messageBlockingQueue.size());
+		}
+
 	}
 }

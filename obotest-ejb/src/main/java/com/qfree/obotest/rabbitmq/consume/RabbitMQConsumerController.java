@@ -465,83 +465,14 @@ public class RabbitMQConsumerController {
 	public void terminate() {
 		logger.info("Shutting down...");
 
-		//TODO Move this in to stopConsumerThreadsAndWaitForTermination() ? Call repeatedly.
-		//		this.stop();
-
 		/*
 		 * Stop the RabbitMQ consumer thread(s) and then wait for them to 
 		 * terminate.
 		 */
+		logger.info("Stopping the RabbitMQ consumer threads...");
 		stopConsumerThreadsAndWaitForTermination();
 
-		// Stop the consumer thread(s) and then wait for them to terminate.
-		//		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-		//			if (rabbitMQConsumerThread != null) {
-		//				logger.debug("Waiting for RabbitMQ consumer thread to terminate...");
-		//				try {
-		//					//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//					rabbitMQConsumerThread.join(30000);	// Wait maximum 30 seconds
-		//				} catch (InterruptedException e) {
-		//				}
-		//			}
-		//		} else {
-		//			// TODO This is slightly more efficient and a little clearer.
-		//			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-		//			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-		//				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-		//					if (rabbitMQConsumerThreads.get(threadIndex) != null) {
-		//						logger.debug("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
-		//						try {
-		//							//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//							rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
-		//						} catch (InterruptedException e) {
-		//						}
-		//					}
-		//				} else {
-		//					logger.error(
-		//							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-		//							NUM_RABBITMQ_CONSUMER_THREADS);
-		//				}
-		//			}
-		//		}
-		//
-		//		// Another way of doing this:
-		//
-		//		//		long loopTime = 0;
-		//		//		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-		//		//			while (this.getConsumerState() != RabbitMQConsumerStates.STOPPED) {
-		//		//				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
-		//		//				loopTime = +WAITING_LOOP_SLEEP_MS;
-		//		//				try {
-		//		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//		//				} catch (InterruptedException e) {
-		//		//				}
-		//		//				// Wait maximum 60 seconds.
-		//		//				if (loopTime >= 60000) {
-		//		//					logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//		//					break;
-		//		//				}
-		//		//			}
-		//		//		} else {
-		//		//			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-		//		//				while (this.getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
-		//		//					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
-		//		//					loopTime = +WAITING_LOOP_SLEEP_MS;
-		//		//					try {
-		//		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//		//					} catch (InterruptedException e) {
-		//		//					}
-		//		//					// Wait maximum 60 seconds.
-		//		//					if (loopTime >= 60000) {
-		//		//						logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//		//						break;
-		//		//					}
-		//		//				}
-		//		//			}
-		//		//		}
-
 		logger.info("RabbitMQ consumer controller will now be destroyed by the container");
-
 	}
 
 	/**
