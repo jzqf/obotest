@@ -106,7 +106,7 @@ public class RabbitMQConsumerController {
 	 */
 	private static final int MAX_MESSAGE_HANDLERS = 100;
 
-	private volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
+	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 
 	/*
 	 * This counting semaphore is used to count the number of threads that are
@@ -178,16 +178,6 @@ public class RabbitMQConsumerController {
 	@Inject
 	@HelperBean2
 	RabbitMQConsumerHelper messageConsumerHelperBean2;	// used by the second thread
-
-	@Lock(LockType.READ)
-	public RabbitMQConsumerControllerStates getState() {
-		return state;
-	}
-
-	@Lock(LockType.WRITE)
-	public void setState(RabbitMQConsumerControllerStates state) {
-		this.state = state;
-	}
 
 	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
 	@Lock(LockType.READ)
@@ -359,7 +349,7 @@ public class RabbitMQConsumerController {
 		 * will not function correctly.
 		 */
 		if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-			this.setState(RabbitMQConsumerControllerStates.RUNNING);
+			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
 			logger.debug("Calling heartBeat()...");
 			this.heartBeat();	// will start consumer thread(s), if necessary
 		} else {
@@ -387,7 +377,7 @@ public class RabbitMQConsumerController {
 		//			}
 		//		}
 
-		if (this.getState() == RabbitMQConsumerControllerStates.RUNNING) {
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
 			if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 				logger.trace("Checking if RabbitMQ consumer thread is running...");
 
@@ -406,7 +396,7 @@ public class RabbitMQConsumerController {
 					//					}
 
 					logger.info("Starting RabbitMQ consumer thread...");
-					rabbitMQConsumer = new RabbitMQConsumer(this, messageConsumerHelperBean1);
+					rabbitMQConsumer = new RabbitMQConsumer(messageConsumerHelperBean1);
 					rabbitMQConsumerThread = threadFactory.newThread(rabbitMQConsumer);
 					rabbitMQConsumerThread.start();
 
@@ -429,7 +419,7 @@ public class RabbitMQConsumerController {
 						logger.info("Starting RabbitMQ consumer thread {}...", threadIndex);
 
 						rabbitMQConsumers.set(threadIndex,
-								new RabbitMQConsumer(this, rabbitMQConsumerThreadImageEventSenders.get(threadIndex)));
+								new RabbitMQConsumer(rabbitMQConsumerThreadImageEventSenders.get(threadIndex)));
 						rabbitMQConsumerThreads.set(threadIndex,
 								threadFactory.newThread(rabbitMQConsumers.get(threadIndex)));
 						rabbitMQConsumerThreads.get(threadIndex).start();
@@ -448,7 +438,7 @@ public class RabbitMQConsumerController {
 	public void stop() {
 		logger.info("Request received to stop RabbitMQ consumer thread(s)");
 
-		this.setState(RabbitMQConsumerControllerStates.STOPPED);
+		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
 
 		/*
 		 * Signal the RabbitMQ consumer thread(s) so they can check the state

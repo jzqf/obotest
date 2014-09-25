@@ -26,14 +26,6 @@ public class RabbitMQProducer implements Runnable {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducer.class);
 
-	/*
-	 * TODO We can eliminate rabbitMQProducerController if we make RabbitMQProducerController.state public static volatile!!!!!!!!!!
-	 * TODO Then we can also eliminate the method RabbitMQProducerController.getState() !!!!!!!!!!!!
-	 * TODO If assigning a value to a volatile attribute is thread-safe, then I can also get rid of getState()!!
-	 */
-	//	@EJB - cannot use because this class is not instantiated by the container
-	RabbitMQProducerController rabbitMQProducerController = null;
-
 	RabbitMQProducerHelper messageProducerHelper = null;
 
 	public RabbitMQProducerStates getState() {
@@ -52,11 +44,8 @@ public class RabbitMQProducer implements Runnable {
 	public RabbitMQProducer() {
 	}
 
-	public RabbitMQProducer(
-			RabbitMQProducerController rabbitMQProducerController,
-			RabbitMQProducerHelper messageProducerHelper) {
+	public RabbitMQProducer(RabbitMQProducerHelper messageProducerHelper) {
 		super();
-		this.rabbitMQProducerController = rabbitMQProducerController;
 		this.messageProducerHelper = messageProducerHelper;
 	}
 
@@ -100,7 +89,7 @@ public class RabbitMQProducer implements Runnable {
 						}
 
 						logger.trace("Checking if shutdown was requested...");
-						if (rabbitMQProducerController.getState() == RabbitMQProducerControllerStates.STOPPED) {
+						if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
 							logger.info("Shutdown request detected. This thread will terminate.");
 							break;
 						}

@@ -25,9 +25,6 @@ public class RabbitMQConsumer implements Runnable {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumer.class);
 
-	//	@EJB - cannot use because this class is not instantiated by the container
-	RabbitMQConsumerController rabbitMQConsumerController = null;
-
 	RabbitMQConsumerHelper messageConsumerHelper = null;
 
 	public RabbitMQConsumerStates getState() {
@@ -46,11 +43,8 @@ public class RabbitMQConsumer implements Runnable {
 	public RabbitMQConsumer() {
 	}
 
-	public RabbitMQConsumer(
-			RabbitMQConsumerController rabbitMQConsumerController,
-			RabbitMQConsumerHelper messageConsumerHelper) {
+	public RabbitMQConsumer(RabbitMQConsumerHelper messageConsumerHelper) {
 		super();
-		this.rabbitMQConsumerController = rabbitMQConsumerController;
 		this.messageConsumerHelper = messageConsumerHelper;
 	}
 
@@ -93,7 +87,7 @@ public class RabbitMQConsumer implements Runnable {
 						}
 
 						logger.trace("Checking if shutdown was requested...");
-						if (rabbitMQConsumerController.getState() == RabbitMQConsumerControllerStates.STOPPED) {
+						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
 							logger.info("Shutdown request detected. This thread will terminate.");
 							break;
 						}

@@ -116,8 +116,7 @@ public class RabbitMQProducerController {
 	@Inject
 	RabbitMQConsumerController rabbitMQConsumerController;	// used in @PreDestroy - eliminate if possible
 
-	private volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
-	//		public static volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
+	public static volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
 
 	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
 	private RabbitMQProducer rabbitMQProducer = null;
@@ -129,16 +128,6 @@ public class RabbitMQProducerController {
 	private List<RabbitMQProducer> rabbitMQProducers = null;
 	private List<RabbitMQProducerHelper> rabbitMQProducerThreadImageEventSenders = null;
 	private List<Thread> rabbitMQProducerThreads = null;
-
-	@Lock(LockType.READ)
-	public RabbitMQProducerControllerStates getState() {
-		return state;
-	}
-
-	@Lock(LockType.WRITE)
-	public void setState(RabbitMQProducerControllerStates state) {
-		this.state = state;
-	}
 
 	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
 	@Lock(LockType.READ)
@@ -177,11 +166,6 @@ public class RabbitMQProducerController {
 			return RabbitMQProducerStates.STOPPED;	// simpler than throwing an exception :-)
 		}
 	}
-
-	//	@Lock(LockType.READ)
-	//	public BlockingQueue<byte[]> getMessageBlockingQueue() {
-	//		return messageBlockingQueue;
-	//	}
 
 	/*
 	 * @Startup ensures that this method is called when the application starts 
@@ -297,7 +281,7 @@ public class RabbitMQProducerController {
 		 * will not function correctly.
 		 */
 		if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-			this.setState(RabbitMQProducerControllerStates.RUNNING);
+			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 			logger.debug("Calling heartBeat()...");
 			this.heartBeat();	// will start producer thread(s), if necessary
 		} else {
@@ -325,7 +309,7 @@ public class RabbitMQProducerController {
 		//			}
 		//		}
 
-		if (this.getState() == RabbitMQProducerControllerStates.RUNNING) {
+		if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.RUNNING) {
 			if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
 				logger.trace("Checking if RabbitMQ producer thread is running...");
 
@@ -344,7 +328,7 @@ public class RabbitMQProducerController {
 					//					}
 
 					logger.info("Starting RabbitMQ producer thread...");
-					rabbitMQProducer = new RabbitMQProducer(this, messageProducerHelperBean1);
+					rabbitMQProducer = new RabbitMQProducer(messageProducerHelperBean1);
 					rabbitMQProducerThread = threadFactory.newThread(rabbitMQProducer);
 					rabbitMQProducerThread.start();
 
@@ -367,7 +351,7 @@ public class RabbitMQProducerController {
 						logger.info("Starting RabbitMQ producer thread {}...", threadIndex);
 
 						rabbitMQProducers.set(threadIndex,
-								new RabbitMQProducer(this, rabbitMQProducerThreadImageEventSenders.get(threadIndex)));
+								new RabbitMQProducer(rabbitMQProducerThreadImageEventSenders.get(threadIndex)));
 						rabbitMQProducerThreads.set(threadIndex,
 								threadFactory.newThread(rabbitMQProducers.get(threadIndex)));
 						rabbitMQProducerThreads.get(threadIndex).start();
@@ -386,7 +370,7 @@ public class RabbitMQProducerController {
 	public void stop() {
 		logger.info("Request received to stop RabbitMQ producer thread(s)");
 
-		this.setState(RabbitMQProducerControllerStates.STOPPED);
+		RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;
 
 		/*
 		 * Signal the RabbitMQ producer thread(s) so they can check the state
