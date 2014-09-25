@@ -1,7 +1,5 @@
 package com.qfree.obotest.rabbitmq.produce;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -127,47 +125,47 @@ public class RabbitMQProducerController {
 	// These are parallel lists (arrays could also be used). There will be one
 	// element in each list for each RabbitMQ producer thread to be started from
 	// this singleton session bean.
-	private List<RabbitMQProducer> rabbitMQProducers = null;
-	private List<RabbitMQProducerHelper> rabbitMQProducerThreadImageEventSenders = null;
-	private List<Thread> rabbitMQProducerThreads = null;
+	private final List<RabbitMQProducer> rabbitMQProducers = null;
+	private final List<RabbitMQProducerHelper> rabbitMQProducerThreadImageEventSenders = null;
+	private final List<Thread> rabbitMQProducerThreads = null;
 
-	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
-	@Lock(LockType.READ)
-	public RabbitMQProducerStates getProducerState() {
-		if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
-			if (rabbitMQProducer != null) {
-				return rabbitMQProducer.getState();
-			} else {
-				// This should never happen. Am I being too careful?
-				logger.error("rabbitMQProducer is null, but its thread seems to be alive");
-				return RabbitMQProducerStates.STOPPED;
-			}
-		} else {
-			return RabbitMQProducerStates.STOPPED;
-		}
-	}
-
-	// NUM_RABBITMQ_PRODUCER_THREADS > 1:
-	@Lock(LockType.READ)
-	public RabbitMQProducerStates getProducerState(int threadIndex) {
-		if (threadIndex < NUM_RABBITMQ_PRODUCER_THREADS) {
-			if (rabbitMQProducerThreads.get(threadIndex) != null && rabbitMQProducerThreads.get(threadIndex).isAlive()) {
-				if (rabbitMQProducers.get(threadIndex) != null) {
-					return rabbitMQProducers.get(threadIndex).getState();
-				} else {
-					// This should never happen. Am I being too careful?
-					logger.error("rabbitMQProducer {} is null, but its thread seems to be alive", threadIndex);
-					return RabbitMQProducerStates.STOPPED;
-				}
-			} else {
-				return RabbitMQProducerStates.STOPPED;
-			}
-		} else {
-			logger.error("threadIndex = {}, but NUM_RABBITMQ_PRODUCER_THREADS = {}",
-					threadIndex, NUM_RABBITMQ_PRODUCER_THREADS);
-			return RabbitMQProducerStates.STOPPED;	// simpler than throwing an exception :-)
-		}
-	}
+	//	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
+	//	@Lock(LockType.READ)
+	//	public RabbitMQProducerStates getProducerState() {
+	//		if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
+	//			if (rabbitMQProducer != null) {
+	//				return rabbitMQProducer.getState();
+	//			} else {
+	//				// This should never happen. Am I being too careful?
+	//				logger.error("rabbitMQProducer is null, but its thread seems to be alive");
+	//				return RabbitMQProducerStates.STOPPED;
+	//			}
+	//		} else {
+	//			return RabbitMQProducerStates.STOPPED;
+	//		}
+	//	}
+	//
+	//	// NUM_RABBITMQ_PRODUCER_THREADS > 1:
+	//	@Lock(LockType.READ)
+	//	public RabbitMQProducerStates getProducerState(int threadIndex) {
+	//		if (threadIndex < NUM_RABBITMQ_PRODUCER_THREADS) {
+	//			if (rabbitMQProducerThreads.get(threadIndex) != null && rabbitMQProducerThreads.get(threadIndex).isAlive()) {
+	//				if (rabbitMQProducers.get(threadIndex) != null) {
+	//					return rabbitMQProducers.get(threadIndex).getState();
+	//				} else {
+	//					// This should never happen. Am I being too careful?
+	//					logger.error("rabbitMQProducer {} is null, but its thread seems to be alive", threadIndex);
+	//					return RabbitMQProducerStates.STOPPED;
+	//				}
+	//			} else {
+	//				return RabbitMQProducerStates.STOPPED;
+	//			}
+	//		} else {
+	//			logger.error("threadIndex = {}, but NUM_RABBITMQ_PRODUCER_THREADS = {}",
+	//					threadIndex, NUM_RABBITMQ_PRODUCER_THREADS);
+	//			return RabbitMQProducerStates.STOPPED;	// simpler than throwing an exception :-)
+	//		}
+	//	}
 
 	/*
 	 * @Startup ensures that this method is called when the application starts 
@@ -208,20 +206,16 @@ public class RabbitMQProducerController {
 			 */
 		} else {
 			// Initialize lists with NUM_RABBITMQ_PRODUCER_THREADS null values each.
-			rabbitMQProducers = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_PRODUCER_THREADS,
-					(RabbitMQProducer) null));
-			rabbitMQProducerThreads = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_PRODUCER_THREADS, (Thread) null));
-			//		for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
-			//			rabbitMQProducers.add(null);
-			//			rabbitMQProducerThreads.add(null);
-			//		}
+			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
+				rabbitMQProducers.add(null);
+				rabbitMQProducerThreads.add(null);
+			}
 
 			if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
 				// Initialize list rabbitMQProducerThreadImageEventSenders with a 
 				// different singleton session bean in each element.  These beans
 				// will fire the CDI events from the RabbitMQ producer threads that
 				// are managed by the current singleton session bean
-				rabbitMQProducerThreadImageEventSenders = new ArrayList<>();
 				rabbitMQProducerThreadImageEventSenders.add(messageProducerHelperBean1);
 				if (NUM_RABBITMQ_PRODUCER_THREADS > 1) {
 					rabbitMQProducerThreadImageEventSenders.add(messageProducerHelperBean2);
@@ -508,6 +502,14 @@ public class RabbitMQProducerController {
 	 */
 	@Lock(LockType.WRITE)
 	public void stopConsumerThreadsAndWaitForTermination() {
+
+		/*
+		 * TODO I see no good reason why this method cannot be written like 
+		 * RabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination()
+		 * and call .join() for the thread(s) in question.  Then we can even
+		 * get rid of the getConsumerState() & getConsumerState(threadIndex)
+		 * methods!!!!!
+		 */
 
 		long loopTime = 0;
 		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {

@@ -274,12 +274,11 @@ public class RabbitMQConsumerController {
 			 */
 		} else {
 			// Initialize lists with NUM_RABBITMQ_CONSUMER_THREADS null values each.
-			//			rabbitMQConsumers = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_CONSUMER_THREADS,
-			//					(RabbitMQConsumer) null));
-			//			rabbitMQConsumerThreads = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_CONSUMER_THREADS, (Thread) null));
-			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-				rabbitMQConsumers.add(null);
-				rabbitMQConsumerThreads.add(null);
+			synchronized (rabbitMQConsumers) {
+				for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
+					rabbitMQConsumers.add(null);
+					rabbitMQConsumerThreads.add(null);
+				}
 			}
 
 			if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
@@ -370,28 +369,30 @@ public class RabbitMQConsumerController {
 					logger.trace("RabbitMQ consumer thread is already running");
 				}
 			} else {
-				for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-					logger.trace("Checking if RabbitMQ consumer thread {} is running...", threadIndex);
+				synchronized (rabbitMQConsumers) {
+					for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
+						logger.trace("Checking if RabbitMQ consumer thread {} is running...", threadIndex);
 
-					/*
-					 * If the consumer thread is not running, we start it here. If it was
-					 * running earlier but has stopped in the meantime, then isAlive() 
-					 * will return false; it is not allowed to restart a terminated thread,
-					 * so we instantiate a new thread instead of attempting to restart it.
-					 */
-					if (rabbitMQConsumerThreads.get(threadIndex) == null
-							|| !rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+						/*
+						 * If the consumer thread is not running, we start it here. If it was
+						 * running earlier but has stopped in the meantime, then isAlive() 
+						 * will return false; it is not allowed to restart a terminated thread,
+						 * so we instantiate a new thread instead of attempting to restart it.
+						 */
+						if (rabbitMQConsumerThreads.get(threadIndex) == null
+								|| !rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
 
-						logger.info("Starting RabbitMQ consumer thread {}...", threadIndex);
+							logger.info("Starting RabbitMQ consumer thread {}...", threadIndex);
 
-						rabbitMQConsumers.set(threadIndex,
-								new RabbitMQConsumer(rabbitMQConsumerThreadImageEventSenders.get(threadIndex)));
-						rabbitMQConsumerThreads.set(threadIndex,
-								threadFactory.newThread(rabbitMQConsumers.get(threadIndex)));
-						rabbitMQConsumerThreads.get(threadIndex).start();
+							rabbitMQConsumers.set(threadIndex,
+									new RabbitMQConsumer(rabbitMQConsumerThreadImageEventSenders.get(threadIndex)));
+							rabbitMQConsumerThreads.set(threadIndex,
+									threadFactory.newThread(rabbitMQConsumers.get(threadIndex)));
+							rabbitMQConsumerThreads.get(threadIndex).start();
 
-					} else {
-						logger.trace("RabbitMQ consumer thread {} is already running", threadIndex);
+						} else {
+							logger.trace("RabbitMQ consumer thread {} is already running", threadIndex);
+						}
 					}
 				}
 			}
@@ -465,7 +466,7 @@ public class RabbitMQConsumerController {
 	 * terminate.
 	 */
 	@Lock(LockType.WRITE)
-	public void stopConsumerThreadsAndWaitForTermination() {
+	private void stopConsumerThreadsAndWaitForTermination() {
 
 		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 			if (rabbitMQConsumerThread != null) {

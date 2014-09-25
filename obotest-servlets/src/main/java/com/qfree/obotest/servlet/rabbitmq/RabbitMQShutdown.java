@@ -57,8 +57,8 @@ public class RabbitMQShutdown extends HttpServlet {
 		logger.debug("rabbitMQConsumerController.acquiredMessageHandlerPermits() = {}",
 				rabbitMQConsumerController.acquiredMessageHandlerPermits());
 
-		logger.debug("Calling rabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination()...");
-		rabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination();
+		logger.debug("Calling rabbitMQProducerController.stopConsumerThreadsAndWaitForTermination()...");
+		rabbitMQProducerController.stopConsumerThreadsAndWaitForTermination();
 
 		//		logger.debug("rabbitMQConsumerController.acquiredMessageHandlerPermits() = {}",
 		//				rabbitMQConsumerController.acquiredMessageHandlerPermits());
