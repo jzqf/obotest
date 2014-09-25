@@ -362,48 +362,48 @@ public class RabbitMQProducerController {
 
 	}
 
-	@Lock(LockType.WRITE)
-	public void stop() {
-		logger.info("Request received to stop RabbitMQ producer thread(s)");
-
-		RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;
-
-		/*
-		 * Signal the RabbitMQ producer thread(s) so they can check the state
-		 * set in this thread to see if they should self-terminate. The 
-		 * interrupt is necessary because they may be blocked polling for an 
-		 * item to remove from the messageBlockingQueue blocking queue.
-		 * 
-		 * I have commented out this code to avoid the problem where the target
-		 * thread may be in the act of processing a message, in which case the 
-		 * interrupt will cause the thread to abort the processing, i.e., it
-		 * won't be necessarily blocked somewhere where it can abort safely, 
-		 * which was the original idea of how this interrupt was to be used; 
-		 * hence, the message will probably we be lost unless some very fancy 
-		 * book keeping is done.
-		 */
-		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-		//			if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
-		//				logger.debug("Interrupting the RabbitMQ producer thread...");
-		//				rabbitMQProducerThread.interrupt();
-		//			}
-		//		} else {
-		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-		//				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-		//					if (rabbitMQProducerThreads.get(threadIndex) != null
-		//							&& rabbitMQProducerThreads.get(threadIndex).isAlive()) {
-		//						logger.debug("Interrupting RabbitMQ producer thread {}...", threadIndex);
-		//						rabbitMQProducerThreads.get(threadIndex).interrupt();
-		//					}
-		//				} else {
-		//					logger.error(
-		//							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
-		//							NUM_RABBITMQ_PRODUCER_THREADS);
-		//				}
-		//			}
-		//		}
-
-	}
+	//	@Lock(LockType.WRITE)
+	//	public void stop() {
+	//		logger.info("Request received to stop RabbitMQ producer thread(s)");
+	//
+	//		RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;
+	//
+	//		/*
+	//		 * Signal the RabbitMQ producer thread(s) so they can check the state
+	//		 * set in this thread to see if they should self-terminate. The 
+	//		 * interrupt is necessary because they may be blocked polling for an 
+	//		 * item to remove from the messageBlockingQueue blocking queue.
+	//		 * 
+	//		 * I have commented out this code to avoid the problem where the target
+	//		 * thread may be in the act of processing a message, in which case the 
+	//		 * interrupt will cause the thread to abort the processing, i.e., it
+	//		 * won't be necessarily blocked somewhere where it can abort safely, 
+	//		 * which was the original idea of how this interrupt was to be used; 
+	//		 * hence, the message will probably we be lost unless some very fancy 
+	//		 * book keeping is done.
+	//		 */
+	//		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
+	//		//			if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
+	//		//				logger.debug("Interrupting the RabbitMQ producer thread...");
+	//		//				rabbitMQProducerThread.interrupt();
+	//		//			}
+	//		//		} else {
+	//		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
+	//		//				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
+	//		//					if (rabbitMQProducerThreads.get(threadIndex) != null
+	//		//							&& rabbitMQProducerThreads.get(threadIndex).isAlive()) {
+	//		//						logger.debug("Interrupting RabbitMQ producer thread {}...", threadIndex);
+	//		//						rabbitMQProducerThreads.get(threadIndex).interrupt();
+	//		//					}
+	//		//				} else {
+	//		//					logger.error(
+	//		//							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
+	//		//							NUM_RABBITMQ_PRODUCER_THREADS);
+	//		//				}
+	//		//			}
+	//		//		}
+	//
+	//	}
 
 	/*
 	 * This method *must* be allowed to terminate. If it stays in an endless
@@ -694,7 +694,7 @@ public class RabbitMQProducerController {
 
 		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
 			if (rabbitMQProducerThread != null) {
-				stop();	// call repeatedly, just in case
+				RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
 				logger.debug("Waiting for RabbitMQ producer thread to terminate...");
 				try {
 					//TODO Make this 30000 ms a configurable parameter or a final static variable
@@ -708,7 +708,7 @@ public class RabbitMQProducerController {
 			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
 				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
 					if (rabbitMQProducerThreads.get(threadIndex) != null) {
-						stop();	// call repeatedly, just in case
+						RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
 						logger.debug("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
 						try {
 							//TODO Make this 30000 ms a configurable parameter or a final static variable
