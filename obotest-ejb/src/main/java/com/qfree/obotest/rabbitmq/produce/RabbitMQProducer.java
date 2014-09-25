@@ -26,6 +26,11 @@ public class RabbitMQProducer implements Runnable {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducer.class);
 
+	/*
+	 * TODO We can eliminate rabbitMQProducerController if we make RabbitMQProducerController.state public static volatile!!!!!!!!!!
+	 * TODO Then we can also eliminate the method RabbitMQProducerController.getState() !!!!!!!!!!!!
+	 * TODO If assigning a value to a volatile attribute is thread-safe, then I can also get rid of getState()!!
+	 */
 	//	@EJB - cannot use because this class is not instantiated by the container
 	RabbitMQProducerController rabbitMQProducerController = null;
 
@@ -68,7 +73,7 @@ public class RabbitMQProducer implements Runnable {
 				try {
 
 					//TODO This must be eliminated or updated to something related to producing:
-					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
+					//					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
 
 					while (true) {
 						try {

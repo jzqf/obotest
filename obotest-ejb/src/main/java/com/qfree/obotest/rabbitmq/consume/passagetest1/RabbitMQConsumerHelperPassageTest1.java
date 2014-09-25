@@ -2,7 +2,6 @@ package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
 
-import javax.ejb.Asynchronous;
 import javax.ejb.Lock;
 import javax.ejb.LockType;
 import javax.enterprise.event.Event;
@@ -47,7 +46,12 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerHelperPassageTest1.class);
 
 	private static final String PASSAGE_QUEUE_NAME = "passage_queue_test1";
-	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 5000;
+	/*
+	 * Since this thread is never interrupted via Thread.interrupt(), we don't 
+	 * want to block for any length of time so that this thread can respond to 
+	 * state changes in a timely fashion. So this timeout should be "small".
+	 */
+	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 1000;
 
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
@@ -169,6 +173,24 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * is fired back to the appropriate thread that has the reference to the correct 
 				 * channel on which the acknowledgement must be sent.
 				 * 
+				 * ANOTHER IDEA TO SOLVE THIS PROBLEM:
+				 * 
+				 * 1. Send the "delivery tag" along with rest of the event 
+				 *    payload to the "Observer" method (similar to above)
+				 * 
+				 * 2. After the "Observer" thread that receives the event that
+				 *    is fired to it, it places the delivery tag into one of two
+				 *    blocking queues: 
+				 *        a. One queue for successfully processed messages
+				 *        b. One queue for messages *not* successfully processed.
+				 *    It will be the responsibility of another thread to process
+				 *    the entries in these queues to acknowledge the messages
+				 *    that were successfully processed (this means that the 
+				 *    number of unacknowledged messages might build up 
+				 *    somewhat), and to do whatever it can with the message
+				 *    delivery tags for messages that were *not* processed
+				 *    successfully. 
+				 * 
 				 * It is probably best to just wait and deal with this functionality at
 				 * a later time, since it may never be needed.
 				 */
@@ -224,7 +246,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * 
 	 */
 	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. I SHOULD PROBABLY REMOVE IT HERE AND IN THE OTHER CLASS
-	@Asynchronous
+	//	@Asynchronous
 	@Lock(LockType.WRITE)
 	private void firePassageEvent(byte[] passageBytes) {
 		logger.debug("[{}]: Creating event payload for passage [{} bytes]", subClassName, passageBytes.length);

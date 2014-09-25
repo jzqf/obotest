@@ -91,7 +91,7 @@ public class RabbitMQConsumerController {
 		STOPPED, RUNNING
 	};
 
-	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
+	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 1;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
 	//	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	/*
@@ -99,7 +99,7 @@ public class RabbitMQConsumerController {
 	 * run simultaneously. This is set to a sufficiently large number that this
 	 * limit should never be reached because there is no desire or attempt to
 	 * limit the number of such threads (the application container will manage
-	 * this automatically). Rather, the couting semaphore 
+	 * this automatically). Rather, the counting semaphore 
 	 * messageHandlerCounterSemaphore is used to monitor the number of such 
 	 * threads and any Semaphore object needs to be initialized with the 
 	 * maximum number of permits that it will allow to be acquired.
@@ -118,19 +118,38 @@ public class RabbitMQConsumerController {
 	 * down or the application is undeployed form the container (which is done
 	 * whenever the application is *re*deployed).
 	 */
-	private static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
+	public static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
 
 	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
-	private RabbitMQConsumer rabbitMQConsumer = null;
-	private Thread rabbitMQConsumerThread = null;
+	/*
+	 * These are declared "volatile" because they are read in the method 
+	 * getConsumerState(),and this method can be called from other threads, 
+	 * such as from the RabbitMQProducerController singleton bean thread, as
+	 * well as from the servlet that stops the consumer threads.
+	 */
+	private volatile RabbitMQConsumer rabbitMQConsumer = null;	//TODO TRY TO REMOVE DEPENDENCIES ON THIS AND THE OTHER "volatile" declarations!
+	private volatile Thread rabbitMQConsumerThread = null;
 	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
-	// These are parallel lists (arrays could also be used). There will be one
-	// element in each list for each RabbitMQ consumer thread to be started from
-	// this singleton session bean.
-	private List<RabbitMQConsumer> rabbitMQConsumers = null;
-	private List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
-	private List<Thread> rabbitMQConsumerThreads = null;
-	
+	/*
+	 * These are parallel lists (arrays could also be used). There will be one 
+	 * element in each list for each RabbitMQ consumer thread to be started from
+	 * this singleton session bean.
+	 * 
+	 * These are declared "volatile" because they are read in the method 
+	 * getConsumerState(int threadIndex),and this method can be called from 
+	 * other threads, such as from the RabbitMQProducerController singleton bean
+	 * thread, as well as from the servlet that stops the consumer threads.
+	 */
+	private volatile List<RabbitMQConsumer> rabbitMQConsumers = null;
+	private volatile List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
+	private volatile List<Thread> rabbitMQConsumerThreads = null;
+	//	public static final List<RabbitMQConsumer> rabbitMQConsumers =
+	//			Collections.synchronizedList(new ArrayList<RabbitMQConsumer>());
+	//	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders =
+	//			Collections.synchronizedList(new ArrayList<RabbitMQConsumerHelper>());
+	//	public static final List<Thread> rabbitMQConsumerThreads =
+	//			Collections.synchronizedList(new ArrayList<Thread>());
+
 	@Resource
 	ManagedThreadFactory threadFactory;
 
@@ -207,29 +226,31 @@ public class RabbitMQConsumerController {
 		}
 	}
 
-	@Lock(LockType.WRITE)
-	public boolean acquireMessageHandlerPermit() {
-		/*
-		 * Since the total number of permits is set to a large number, this 
-		 * should, ideally, always succeed. Assuming that the semaphore has 
-		 * been constructed with a reasonably large number of maximum permits,
-		 * if a permit is *not* acquired here, then the solutionto this problem
-		 * will probably *not* be to wait or increase the maximum number of 
-		 * permits, but to look for a bug in the algorithm.
-		 */
-		boolean acquired = RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire();
-		logger.debug("Message handler permit acquired. Numer of active message handlers = {}",
-				acquiredMessageHandlerPermits());
-		return acquired;
-	}
+	//	@Lock(LockType.WRITE)
+	//	public boolean acquireMessageHandlerPermit() {
+	//		/*
+	//		 * Since the total number of permits is set to a large number, this 
+	//		 * should, ideally, always succeed (since there is a reasonable upper 
+	//		 * limit to how many threads the container will devote for receiving
+	//		 * the CDI events. Assuming that the semaphore has 
+	//		 * been constructed with a reasonably large number of maximum permits,
+	//		 * if a permit is *not* acquired here, then the solution to this problem
+	//		 * will probably *not* be to wait or increase the maximum number of 
+	//		 * permits, but to look for a bug in the algorithm.
+	//		 */
+	//		boolean acquired = RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire();
+	//		logger.debug("Message handler permit acquired. Number of active message handlers = {}",
+	//				acquiredMessageHandlerPermits());
+	//		return acquired;
+	//	}
 
-	@Lock(LockType.WRITE)
-	public boolean releaseMessageHandlerPermit() {
-		RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
-		logger.debug("Message handler permit released. Numer of active message handlers = {}",
-				acquiredMessageHandlerPermits());
-		return true;
-	}
+	//	@Lock(LockType.WRITE)
+	//	public boolean releaseMessageHandlerPermit() {
+	//		RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
+	//		logger.debug("Message handler permit released. Number of active message handlers = {}",
+	//				acquiredMessageHandlerPermits());
+	//		return true;
+	//	}
 
 	/**
 	 * Returns the number of message handler permits currently acquired. This
@@ -252,7 +273,7 @@ public class RabbitMQConsumerController {
 	@PostConstruct
 	void applicationStartup() {
 
-		logger.debug("Entering applicationStartup()...");
+		logger.info("Entering applicationStartup()...");
 
 		/*
 		 * If an uncaught exception occurs in a thread, the handler set here
@@ -267,7 +288,7 @@ public class RabbitMQConsumerController {
 		 */
 		Thread.setDefaultUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler());
 
-		logger.debug("Setting timer to trigger call to start() in {} ms...",
+		logger.info("Setting timer to trigger call to start() in {} ms...",
 				DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS);
 		@SuppressWarnings("unused")
 		Timer timer =
@@ -432,27 +453,35 @@ public class RabbitMQConsumerController {
 		/*
 		 * Signal the RabbitMQ consumer thread(s) so they can check the state
 		 * set in this thread to see if they should self-terminate.
+		 * 
+		 * I have commented out this code to avoid the problem where the target
+		 * thread may be in the act of processing a message, in which case the 
+		 * interrupt will cause the thread to abort the processing, i.e., it
+		 * won't be necessarily blocked waiting to receive the next message, 
+		 * which was the original idea of how this interrupt was to be used; 
+		 * hence, the message will probably we be lost unless some very fancy 
+		 * book keeping is done.
 		 */
-		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-			if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
-				logger.debug("Interrupting the RabbitMQ consumer thread...");
-				rabbitMQConsumerThread.interrupt();
-			}
-		} else {
-			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-					if (rabbitMQConsumerThreads.get(threadIndex) != null
-							&& rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
-						logger.debug("Interrupting RabbitMQ consumer thread {}...", threadIndex);
-						rabbitMQConsumerThreads.get(threadIndex).interrupt();
-					}
-				} else {
-					logger.error(
-							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-							NUM_RABBITMQ_CONSUMER_THREADS);
-				}
-			}
-		}
+		//		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
+		//			if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
+		//				logger.debug("Interrupting the RabbitMQ consumer thread...");
+		//				rabbitMQConsumerThread.interrupt();
+		//			}
+		//		} else {
+		//			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
+		//				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
+		//					if (rabbitMQConsumerThreads.get(threadIndex) != null
+		//							&& rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+		//						logger.debug("Interrupting RabbitMQ consumer thread {}...", threadIndex);
+		//						rabbitMQConsumerThreads.get(threadIndex).interrupt();
+		//					}
+		//				} else {
+		//					logger.error(
+		//							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
+		//							NUM_RABBITMQ_CONSUMER_THREADS);
+		//				}
+		//			}
+		//		}
 
 	}
 
@@ -522,7 +551,7 @@ public class RabbitMQConsumerController {
 		//			while (this.getConsumerState() != RabbitMQConsumerStates.STOPPED) {
 		//				stop();	// call repeatedly, just in case
 		//				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
-		//				loopTime = +WAITING_LOOP_SLEEP_MS;
+		//				loopTime += WAITING_LOOP_SLEEP_MS;
 		//				try {
 		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
 		//				} catch (InterruptedException e) {
@@ -538,7 +567,7 @@ public class RabbitMQConsumerController {
 		//				while (this.getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
 		//					stop();	// call repeatedly, just in case
 		//					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
-		//					loopTime = +WAITING_LOOP_SLEEP_MS;
+		//					loopTime += WAITING_LOOP_SLEEP_MS;
 		//					try {
 		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
 		//					} catch (InterruptedException e) {

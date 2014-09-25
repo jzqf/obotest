@@ -1,7 +1,6 @@
 package com.qfree.obotest.rabbitmq.produce;
 
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
 
 //TODO This must be eliminated or updated to something related to producing:
 import com.rabbitmq.client.ConsumerCancelledException;
@@ -18,7 +17,7 @@ public interface RabbitMQProducerHelper {
 	public void closeChannel() throws IOException;
 
 	//TODO Is configureProducer() needed at all?
-	public void configureProducer(BlockingQueue<byte[]> messageBlockingQueue) throws IOException;
+	//	public void configureProducer(BlockingQueue<byte[]> messageBlockingQueue) throws IOException;
 
 	//TODO Rename handlePublish --> ?????????????????????????????????
 	public void handlePublish() throws ShutdownSignalException,
