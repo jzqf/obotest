@@ -28,12 +28,6 @@ public class PassageTest1Handler implements Serializable {
 
 	private static final Logger logger = LoggerFactory.getLogger(PassageTest1Handler.class);
 
-	//	@Inject
-	//	private RabbitMQConsumerController rabbitMQConsumerController;
-
-	//	@Inject
-	//	private RabbitMQProducerController rabbitMQProducerController;
-
 	public PassageTest1Handler() {
 		logger.debug("PassageTest1Handler instance created");
 	}
@@ -48,7 +42,6 @@ public class PassageTest1Handler implements Serializable {
 		 * during shutdown that all messages have been processed in the before 
 		 * waiting for the producer queue to empty.
 		 */
-		//		if (rabbitMQConsumerController.acquireMessageHandlerPermit()) {
 		if (RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire()) {
 
 			try {
@@ -91,7 +84,6 @@ public class PassageTest1Handler implements Serializable {
 				}
 
 			} finally {
-				//				rabbitMQConsumerController.releaseMessageHandlerPermit();
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
 				logger.debug("Message handler permit released. Number of free permits = {}",
 						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());

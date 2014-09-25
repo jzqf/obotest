@@ -31,6 +31,8 @@ import org.slf4j.LoggerFactory;
 import com.qfree.obotest.rabbitmq.HelperBean1;
 import com.qfree.obotest.rabbitmq.HelperBean2;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerStates;
 
 /*
  * @Startup marks this bean for "eager initialization" during the application 
@@ -439,7 +441,7 @@ public class RabbitMQProducerController {
 		 * we force the consumer threads to stop here:
 		 */
 		logger.info("Waiting for the consumer threads to terminate...");
-		rabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination();
+		stopConsumerThreadsAndWaitForTermination();
 
 		//		logger.info("Executing rabbitMQConsumerController.setState(RabbitMQConsumerControllerStates.STOPPED);...");
 		//		rabbitMQConsumerController.setState(RabbitMQConsumerControllerStates.STOPPED);
@@ -498,6 +500,90 @@ public class RabbitMQProducerController {
 			//		} catch (InterruptedException e) {
 			//		}
 
+	}
+
+	/**
+	 * Stops the RabbitMQconsumer thread(s) and then wait for it(them) to 
+	 * terminate.
+	 */
+	@Lock(LockType.WRITE)
+	public void stopConsumerThreadsAndWaitForTermination() {
+
+		long loopTime = 0;
+		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
+			while (getConsumerState() != RabbitMQConsumerStates.STOPPED) {
+				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
+				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
+				loopTime += WAITING_LOOP_SLEEP_MS;
+				try {
+					Thread.sleep(WAITING_LOOP_SLEEP_MS);
+				} catch (InterruptedException e) {
+				}
+				//TODO Make this 30000 ms a configurable parameter or a final static variable
+				if (loopTime >= 30000) {
+					logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
+					break;
+				}
+			}
+		} else {
+			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
+				while (getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
+					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
+					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
+					loopTime += WAITING_LOOP_SLEEP_MS;
+					try {
+						Thread.sleep(WAITING_LOOP_SLEEP_MS);
+					} catch (InterruptedException e) {
+					}
+					//TODO Make this 30000 ms a configurable parameter or a final static variable
+					if (loopTime >= 30000) {
+						logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
+						break;
+					}
+				}
+			}
+		}
+
+	}
+
+	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
+	@Lock(LockType.READ)
+	private RabbitMQConsumerStates getConsumerState() {
+		if (RabbitMQConsumerController.rabbitMQConsumerThread != null
+				&& RabbitMQConsumerController.rabbitMQConsumerThread.isAlive()) {
+			if (RabbitMQConsumerController.rabbitMQConsumer != null) {
+				return RabbitMQConsumerController.rabbitMQConsumer.getState();
+			} else {
+				// This should never happen. Am I being too careful?
+				logger.error("rabbitMQConsumer is null, but its thread seems to be alive");
+				return RabbitMQConsumerStates.STOPPED;
+			}
+		} else {
+			return RabbitMQConsumerStates.STOPPED;
+		}
+	}
+
+	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
+	@Lock(LockType.READ)
+	private RabbitMQConsumerStates getConsumerState(int threadIndex) {
+		if (threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS) {
+			if (RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex) != null
+					&& RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+				if (RabbitMQConsumerController.rabbitMQConsumers.get(threadIndex) != null) {
+					return RabbitMQConsumerController.rabbitMQConsumers.get(threadIndex).getState();
+				} else {
+					// This should never happen. Am I being too careful?
+					logger.error("rabbitMQConsumer {} is null, but its thread seems to be alive", threadIndex);
+					return RabbitMQConsumerStates.STOPPED;
+				}
+			} else {
+				return RabbitMQConsumerStates.STOPPED;
+			}
+		} else {
+			logger.error("threadIndex = {}, but NUM_RABBITMQ_CONSUMER_THREADS = {}",
+					threadIndex, RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
+			return RabbitMQConsumerStates.STOPPED;	// simpler than throwing an exception :-)
+		}
 	}
 
 	/**

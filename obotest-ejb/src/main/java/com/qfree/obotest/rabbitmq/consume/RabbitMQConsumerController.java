@@ -91,7 +91,7 @@ public class RabbitMQConsumerController {
 		STOPPED, RUNNING
 	};
 
-	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 1;
+	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
 	//	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	/*
@@ -127,8 +127,10 @@ public class RabbitMQConsumerController {
 	 * such as from the RabbitMQProducerController singleton bean thread, as
 	 * well as from the servlet that stops the consumer threads.
 	 */
-	private volatile RabbitMQConsumer rabbitMQConsumer = null;	//TODO TRY TO REMOVE DEPENDENCIES ON THIS AND THE OTHER "volatile" declarations!
-	private volatile Thread rabbitMQConsumerThread = null;
+	//	private volatile RabbitMQConsumer rabbitMQConsumer = null;
+	//	private volatile Thread rabbitMQConsumerThread = null;
+	public static volatile RabbitMQConsumer rabbitMQConsumer = null;
+	public static volatile Thread rabbitMQConsumerThread = null;
 	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
 	/*
 	 * These are parallel lists (arrays could also be used). There will be one 
@@ -140,15 +142,15 @@ public class RabbitMQConsumerController {
 	 * other threads, such as from the RabbitMQProducerController singleton bean
 	 * thread, as well as from the servlet that stops the consumer threads.
 	 */
-	private volatile List<RabbitMQConsumer> rabbitMQConsumers = null;
-	private volatile List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
-	private volatile List<Thread> rabbitMQConsumerThreads = null;
-	//	public static final List<RabbitMQConsumer> rabbitMQConsumers =
-	//			Collections.synchronizedList(new ArrayList<RabbitMQConsumer>());
-	//	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders =
-	//			Collections.synchronizedList(new ArrayList<RabbitMQConsumerHelper>());
-	//	public static final List<Thread> rabbitMQConsumerThreads =
-	//			Collections.synchronizedList(new ArrayList<Thread>());
+	//	private volatile List<RabbitMQConsumer> rabbitMQConsumers = null;
+	//	private volatile List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
+	//	private volatile List<Thread> rabbitMQConsumerThreads = null;
+	public static final List<RabbitMQConsumer> rabbitMQConsumers =
+			Collections.synchronizedList(new ArrayList<RabbitMQConsumer>());
+	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders =
+			Collections.synchronizedList(new ArrayList<RabbitMQConsumerHelper>());
+	public static final List<Thread> rabbitMQConsumerThreads =
+			Collections.synchronizedList(new ArrayList<Thread>());
 
 	@Resource
 	ManagedThreadFactory threadFactory;
@@ -179,42 +181,6 @@ public class RabbitMQConsumerController {
 	@HelperBean2
 	RabbitMQConsumerHelper messageConsumerHelperBean2;	// used by the second thread
 
-	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
-	@Lock(LockType.READ)
-	public RabbitMQConsumerStates getConsumerState() {
-		if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
-			if (rabbitMQConsumer != null) {
-				return rabbitMQConsumer.getState();
-			} else {
-				// This should never happen. Am I being too careful?
-				logger.error("rabbitMQConsumer is null, but its thread seems to be alive");
-				return RabbitMQConsumerStates.STOPPED;
-			}
-		} else {
-			return RabbitMQConsumerStates.STOPPED;
-		}
-	}
-	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
-	@Lock(LockType.READ)
-	public RabbitMQConsumerStates getConsumerState(int threadIndex) {
-		if (threadIndex < NUM_RABBITMQ_CONSUMER_THREADS) {
-			if (rabbitMQConsumerThreads.get(threadIndex) != null && rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
-				if (rabbitMQConsumers.get(threadIndex) != null) {
-					return rabbitMQConsumers.get(threadIndex).getState();
-				} else {
-					// This should never happen. Am I being too careful?
-					logger.error("rabbitMQConsumer {} is null, but its thread seems to be alive", threadIndex);
-					return RabbitMQConsumerStates.STOPPED;
-				}
-			} else {
-				return RabbitMQConsumerStates.STOPPED;
-			}
-		} else {
-			logger.error("threadIndex = {}, but NUM_RABBITMQ_CONSUMER_THREADS = {}",
-					threadIndex, NUM_RABBITMQ_CONSUMER_THREADS);
-			return RabbitMQConsumerStates.STOPPED;	// simpler than throwing an exception :-)
-		}
-	}
 
 	//	@Lock(LockType.WRITE)
 	//	public boolean acquireMessageHandlerPermit() {
@@ -308,20 +274,20 @@ public class RabbitMQConsumerController {
 			 */
 		} else {
 			// Initialize lists with NUM_RABBITMQ_CONSUMER_THREADS null values each.
-			rabbitMQConsumers = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_CONSUMER_THREADS,
-					(RabbitMQConsumer) null));
-			rabbitMQConsumerThreads = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_CONSUMER_THREADS, (Thread) null));
-			//		for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-			//			rabbitMQConsumers.add(null);
-			//			rabbitMQConsumerThreads.add(null);
-			//		}
+			//			rabbitMQConsumers = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_CONSUMER_THREADS,
+			//					(RabbitMQConsumer) null));
+			//			rabbitMQConsumerThreads = new ArrayList<>(Collections.nCopies(NUM_RABBITMQ_CONSUMER_THREADS, (Thread) null));
+			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
+				rabbitMQConsumers.add(null);
+				rabbitMQConsumerThreads.add(null);
+			}
 
 			if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
 				// Initialize list rabbitMQConsumerThreadImageEventSenders with a 
 				// different singleton session bean in each element.  These beans
 				// will fire the CDI events from the RabbitMQ consumer threads that
 				// are managed by the current singleton session bean
-				rabbitMQConsumerThreadImageEventSenders = new ArrayList<>();
+				//				rabbitMQConsumerThreadImageEventSenders = new ArrayList<>();
 				rabbitMQConsumerThreadImageEventSenders.add(messageConsumerHelperBean1);
 				if (NUM_RABBITMQ_CONSUMER_THREADS > 1) {
 					rabbitMQConsumerThreadImageEventSenders.add(messageConsumerHelperBean2);
