@@ -16,10 +16,8 @@ import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-//TODO This must be eliminated or updated to something related to producing:
-import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.MessageProperties;
-import com.rabbitmq.client.ShutdownSignalException;
+//TODO This must be eliminated or updated to something related to producing:
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
 //TODO This must be eliminated or updated to something related to producing:
 
@@ -129,11 +127,7 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	//	}
 
 	@Override
-	//TODO Update this list of exceptions if necessary after I have written an implementation
-	public void handlePublish() throws ShutdownSignalException,
-			ConsumerCancelledException, InterruptedException, IOException {
-
-		//		if (messageBlockingQueue != null) {
+	public void handlePublish() throws InterruptedException, IOException {
 
 		logger.trace("[{}]: messageBlockingQueue.size() = {}", subClassName,
 				RabbitMQProducerController.messageBlockingQueue.size());
@@ -170,11 +164,6 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			logger.trace("[{}]: RabbitMQProducerController.messageBlockingQueue.poll() timed out after {} ms",
 						subClassName, RABBITMQ_PRODUCER_TIMEOUT_MS);
 			}
-		//		} else {
-		//			logger.error(
-		//					"[{}]: messageBlockingQueue is null. This producer thread helper will not be able to send messages.",
-		//					subClassName);
-		//		}
 	}
 
 	//	@PreDestroy

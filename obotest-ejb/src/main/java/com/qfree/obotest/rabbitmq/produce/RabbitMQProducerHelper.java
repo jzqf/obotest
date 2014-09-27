@@ -1,10 +1,7 @@
 package com.qfree.obotest.rabbitmq.produce;
 
 import java.io.IOException;
-
 //TODO This must be eliminated or updated to something related to producing:
-import com.rabbitmq.client.ConsumerCancelledException;
-import com.rabbitmq.client.ShutdownSignalException;
 
 public interface RabbitMQProducerHelper {
 
@@ -20,7 +17,6 @@ public interface RabbitMQProducerHelper {
 	//	public void configureProducer(BlockingQueue<byte[]> messageBlockingQueue) throws IOException;
 
 	//TODO Rename handlePublish --> ?????????????????????????????????
-	public void handlePublish() throws ShutdownSignalException,
-			ConsumerCancelledException, InterruptedException, IOException;
+	public void handlePublish() throws InterruptedException, IOException;
 
 }

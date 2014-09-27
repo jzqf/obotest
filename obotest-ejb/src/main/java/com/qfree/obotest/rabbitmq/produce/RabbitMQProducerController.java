@@ -283,21 +283,6 @@ public class RabbitMQProducerController {
 	@Lock(LockType.WRITE)
 	public void heartBeat() {
 
-		//		logger.debug("this.getState() = {}", this.getState());
-		//		logger.debug("rabbitMQProducerThreads.size() = {}", rabbitMQProducerThreads.size());
-		//		for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-		//			if (rabbitMQProducerThreads.get(threadIndex) == null) {
-		//				logger.info("rabbitMQProducerThreads.get({}) is null", threadIndex);
-		//			} else {
-		//				logger.info("rabbitMQProducerThreads.get({}) is not null", threadIndex);
-		//			}
-		//			if (rabbitMQProducers.get(threadIndex) == null) {
-		//				logger.info("rabbitMQProducers.get({}) is null", threadIndex);
-		//			} else {
-		//				logger.info("rabbitMQProducers.get({}) is not null", threadIndex);
-		//			}
-		//		}
-
 		if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.RUNNING) {
 			if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
 				logger.trace("Checking if RabbitMQ producer thread is running...");
@@ -309,12 +294,6 @@ public class RabbitMQProducerController {
 				 * so we instantiate a new thread instead of attempting to restart it.
 				 */
 				if (rabbitMQProducerThread == null || !rabbitMQProducerThread.isAlive()) {
-
-					//					if (messageProducerHelperBean1 == null) {
-					//						logger.debug("messageProducerHelperBean1 is null!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-					//					} else {
-					//						logger.debug("messageProducerHelperBean1 not null");
-					//					}
 
 					logger.info("Starting RabbitMQ producer thread...");
 					rabbitMQProducer = new RabbitMQProducer(messageProducerHelperBean1);
@@ -385,62 +364,33 @@ public class RabbitMQProducerController {
 		logger.info("Waiting for the consumer threads to terminate...");
 		stopConsumerThreadsAndWaitForTermination();
 
-		//		logger.info("Executing rabbitMQConsumerController.setState(RabbitMQConsumerControllerStates.STOPPED);...");
-		//		rabbitMQConsumerController.setState(RabbitMQConsumerControllerStates.STOPPED);
-		//		logger.info("Executing rabbitMQConsumerController.stop()...");
-		//		rabbitMQConsumerController.stop();// TODO MUST ALSO WAIT FOR THREAD TO BE CONFIRMED STOPPED
-		//		long longSleep = 5000;
-		//		logger.info("\n*************************************\nSleeping to see if this fixes the shutdown bug\n*************************************");
-		//		try {
-		//			Thread.sleep(longSleep);
-		//		} catch (InterruptedException e) {
-		//		}
+		/*
+		 * Now that the consumer thread(s) are terminated, there will be no new
+		 * incoming messages to process, but some message handler threads may
+		 * still be busy processing incoming messages that were received a 
+		 * little earlier. We must wait for those message handler threads to
+		 * finish their processing and place their outgoing message in the 
+		 * outgoing message queue. 
+		 */
+		logger.info("Waiting for all handler threads to finish processing their incoming messages...");
+		waitForIncomingMessageHandlerThreadsToFinish();	//TODO Check if this is thread-safe or if we need "volatile"
 
-			/*
-			 * Now that the consumer thread(s) are terminated, there will be no new
-			 * incoming messages to process, but some message handler threads may
-			 * still be busy processing incoming messages that were received a 
-			 * little earlier. We must wait for those message handler threads to
-			 * finish their processing and place their outgoing message in the 
-			 * outgoing message queue. 
-			 */
-			logger.info("Waiting for all handler threads to finish processing their incoming messages...");
-			waitForIncomingMessageHandlerThreadsToFinish();	//TODO Check if this is thread-safe or if we need "volatile"
+		/* 
+		 * Now that the consumer thread(s) are terminated and, in addition, all
+		 * message handler threads have finished processing their coming 
+		 * messages, the outgoing message queue can can be allowed to empty as
+		 * the messages in this queue are published by the RabbitMQ producer 
+		 * threads.
+		 */
+		logger.info("Waiting for the messageBlockingQueue queue to empty...");
+		waitForRabbitMQProducerQueueToEmpty();
 
-			//		logger.info("\n*************************************\nSleeping to see if this fixes the shutdown bug\n*************************************");
-			//		try {
-			//			Thread.sleep(longSleep);
-			//		} catch (InterruptedException e) {
-			//		}
-
-			/* 
-			 * Now that the consumer thread(s) are terminated and, in addition, all
-			 * message handler threads have finished processing their coming 
-			 * messages, the outgoing message queue can can be allowed to empty as
-			 * the messages in this queue are published by the RabbitMQ producer 
-			 * threads.
-			 */
-			logger.info("Waiting for the messageBlockingQueue queue to empty...");
-			waitForRabbitMQProducerQueueToEmpty();
-
-			//		logger.info("\n*************************************\nSleeping to see if this fixes the shutdown bug\n*************************************");
-			//		try {
-			//			Thread.sleep(longSleep);
-			//		} catch (InterruptedException e) {
-			//		}
-
-			/*
-			 * Now that the blocking queue that is is used to hold outgoing messages
-			 * is empty, the producer thread(s) can be terminated.
-			 */
-			logger.info("Stopping the RabbitMQ producer threads...");
-			stopProducerThreadsAndWaitForTermination();
-
-			//		logger.info("\n*************************************\nSleeping to see if this fixes the shutdown bug\n*************************************");
-			//		try {
-			//			Thread.sleep(longSleep);
-			//		} catch (InterruptedException e) {
-			//		}
+		/*
+		 * Now that the blocking queue that is is used to hold outgoing messages
+		 * is empty, the producer thread(s) can be terminated.
+		 */
+		logger.info("Stopping the RabbitMQ producer threads...");
+		stopProducerThreadsAndWaitForTermination();
 
 	}
 

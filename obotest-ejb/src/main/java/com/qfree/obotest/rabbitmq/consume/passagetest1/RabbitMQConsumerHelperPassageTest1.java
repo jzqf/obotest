@@ -18,9 +18,7 @@ import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.QueueingConsumer;
-import com.rabbitmq.client.ShutdownSignalException;
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
 
 /*
@@ -119,8 +117,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		channel.basicConsume(PASSAGE_QUEUE_NAME, false, consumer);
 	}
 
-	public void handleDeliveries() throws ShutdownSignalException,
-			ConsumerCancelledException, InterruptedException, IOException {
+	public void handleDeliveries() throws InterruptedException, IOException, InvalidProtocolBufferException {
+
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
@@ -132,7 +130,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			if (false) {
 
 				/*
-				 * Processing here in this method.
+				 * Process the message here in this method.
+				 * TODO Update this to publish a message or place and outgoing method in the producer queue, as in PassageTest1Handler?
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
@@ -142,8 +141,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			} else {
 
 				/*
-				 * Processing in another thread that receives a CDI event that
-				 * is sent from this thread.
+				 * Process the message in another thread that receives a CDI 
+				 * event that is sent from this thread.
 				 */
 
 				/*

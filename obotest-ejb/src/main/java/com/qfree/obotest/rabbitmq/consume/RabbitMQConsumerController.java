@@ -228,7 +228,7 @@ public class RabbitMQConsumerController {
 	 * up.
 	 */
 	@PostConstruct
-	void applicationStartup() {
+	public void applicationStartup() {
 
 		logger.info("Entering applicationStartup()...");
 
@@ -320,22 +320,7 @@ public class RabbitMQConsumerController {
 
 	@Schedule(second = "*/4", minute = "*", hour = "*")
 	@Lock(LockType.WRITE)
-	public void heartBeat() {
-
-		//		logger.debug("this.getState() = {}", this.getState());
-		//		logger.debug("rabbitMQConsumerThreads.size() = {}", rabbitMQConsumerThreads.size());
-		//		for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-		//			if (rabbitMQConsumerThreads.get(threadIndex) == null) {
-		//				logger.info("rabbitMQConsumerThreads.get({}) is null", threadIndex);
-		//			} else {
-		//				logger.info("rabbitMQConsumerThreads.get({}) is not null", threadIndex);
-		//			}
-		//			if (rabbitMQConsumers.get(threadIndex) == null) {
-		//				logger.info("rabbitMQConsumers.get({}) is null", threadIndex);
-		//			} else {
-		//				logger.info("rabbitMQConsumers.get({}) is not null", threadIndex);
-		//			}
-		//		}
+	private void heartBeat() {
 
 		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
 			if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
@@ -348,12 +333,6 @@ public class RabbitMQConsumerController {
 				 * so we instantiate a new thread instead of attempting to restart it.
 				 */
 				if (rabbitMQConsumerThread == null || !rabbitMQConsumerThread.isAlive()) {
-
-					//					if (messageConsumerHelperBean1 == null) {
-					//						logger.debug("messageConsumerHelperBean1 is null!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-					//					} else {
-					//						logger.debug("messageConsumerHelperBean1 not null");
-					//					}
 
 					logger.info("Starting RabbitMQ consumer thread...");
 					rabbitMQConsumer = new RabbitMQConsumer(messageConsumerHelperBean1);
@@ -449,44 +428,6 @@ public class RabbitMQConsumerController {
 				}
 			}
 		}
-
-		// Another way of doing this that checks the "consumer state" instead
-		// of checking directly that the thread(s) has(have) terminated.:
-
-		//		long loopTime = 0;
-		//		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-		//			while (this.getConsumerState() != RabbitMQConsumerStates.STOPPED) {
-		//				stop();	// call repeatedly, just in case
-		//				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
-		//				loopTime += WAITING_LOOP_SLEEP_MS;
-		//				try {
-		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//				} catch (InterruptedException e) {
-		//				}
-		//				// Wait maximum 60 seconds.
-		//				if (loopTime >= 60000) {
-		//					logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//					break;
-		//				}
-		//			}
-		//		} else {
-		//			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-		//				while (this.getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
-		//					stop();	// call repeatedly, just in case
-		//					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
-		//					loopTime += WAITING_LOOP_SLEEP_MS;
-		//					try {
-		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//					} catch (InterruptedException e) {
-		//					}
-		//					// Wait maximum 60 seconds.
-		//					if (loopTime >= 60000) {
-		//						logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//						break;
-		//					}
-		//				}
-		//			}
-		//		}
 
 	}
 }

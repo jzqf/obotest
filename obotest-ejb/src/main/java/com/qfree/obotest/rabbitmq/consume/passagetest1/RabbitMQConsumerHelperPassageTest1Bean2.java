@@ -26,13 +26,4 @@ import com.qfree.obotest.rabbitmq.HelperBean2;
 @HelperBean2
 public class RabbitMQConsumerHelperPassageTest1Bean2 extends RabbitMQConsumerHelperPassageTest1 {
 
-	//	public RabbitMQConsumerHelperPassageTest1Bean2() {
-	//		super();
-	//		/*
-	//		 * This field is used to enable the name of this subclass to be logged 
-	//		 * from its superclass.
-	//		 */
-	//		this.subClassName = this.getClass().getSimpleName();
-	//	}
-
 }
