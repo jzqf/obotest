@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Enumeration;
 
-import javax.ejb.EJB;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -14,8 +13,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
-
 /**
  * Servlet implementation class RequestHeadersServlet
  */
@@ -24,9 +21,6 @@ public class RequestHeadersServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 
 	private static final Logger logger = LoggerFactory.getLogger(RequestHeadersServlet.class);
-
-	@EJB
-	RabbitMQConsumerController rabbitMQConsumerController;
 
 	public RequestHeadersServlet() {
 		super();
@@ -52,9 +46,6 @@ public class RequestHeadersServlet extends HttpServlet {
 
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
-
-		logger.debug("Calling rabbitMQConsumerController.check()...");
-		rabbitMQConsumerController.start();
 
 		response.setContentType("text/html;charset=UTF-8");
 		// PrintWriter out = response.getWriter();

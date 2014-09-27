@@ -263,27 +263,21 @@ public class RabbitMQProducerController {
 
 	}
 
-	/*
-	 * @Timout is used to implement a programmatic delay on application startup
-	 * before the MessageMQ producer thread is started. This method can also be
-	 * called directly, i.e., not via the EJB timer service.
-	*/
+	/**
+	 * Starts the MessageMQ producer thread(s).
+	 * 
+	 * This method is annotated with @Timout to implement a programmatic delay 
+	 * on application startup before the MessageMQ producer thread(s) is(are) 
+	 * started. This method can also be called directly, i.e., not via the EJB 
+	 * timer service.
+	 */
 	@Timeout
 	@Lock(LockType.WRITE)
 	public void start() {
 		logger.info("Request received to start RabbitMQ producer thread");
-		/*
-		 * This test avoids starting the producer thread(s) when we know they
-		 * will not function correctly.
-		 */
-		if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
-			logger.debug("Calling heartBeat()...");
-			this.heartBeat();	// will start producer thread(s), if necessary
-		} else {
-			logger.error("{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
-					NUM_RABBITMQ_PRODUCER_THREADS);
-		}
+		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+		logger.debug("Calling heartBeat()...");
+		this.heartBeat();	// will start producer thread(s), if necessary
 	}
 
 	@Schedule(second = "*/4", minute = "*", hour = "*")
@@ -357,53 +351,8 @@ public class RabbitMQProducerController {
 					}
 				}
 			}
-
 		}
-
 	}
-
-	//	@Lock(LockType.WRITE)
-	//	public void stop() {
-	//		logger.info("Request received to stop RabbitMQ producer thread(s)");
-	//
-	//		RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;
-	//
-	//		/*
-	//		 * Signal the RabbitMQ producer thread(s) so they can check the state
-	//		 * set in this thread to see if they should self-terminate. The 
-	//		 * interrupt is necessary because they may be blocked polling for an 
-	//		 * item to remove from the messageBlockingQueue blocking queue.
-	//		 * 
-	//		 * I have commented out this code to avoid the problem where the target
-	//		 * thread may be in the act of processing a message, in which case the 
-	//		 * interrupt will cause the thread to abort the processing, i.e., it
-	//		 * won't be necessarily blocked somewhere where it can abort safely, 
-	//		 * which was the original idea of how this interrupt was to be used; 
-	//		 * hence, the message will probably we be lost unless some very fancy 
-	//		 * book keeping is done.
-	//		 */
-	//		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-	//		//			if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
-	//		//				logger.debug("Interrupting the RabbitMQ producer thread...");
-	//		//				rabbitMQProducerThread.interrupt();
-	//		//			}
-	//		//		} else {
-	//		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-	//		//				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-	//		//					if (rabbitMQProducerThreads.get(threadIndex) != null
-	//		//							&& rabbitMQProducerThreads.get(threadIndex).isAlive()) {
-	//		//						logger.debug("Interrupting RabbitMQ producer thread {}...", threadIndex);
-	//		//						rabbitMQProducerThreads.get(threadIndex).interrupt();
-	//		//					}
-	//		//				} else {
-	//		//					logger.error(
-	//		//							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
-	//		//							NUM_RABBITMQ_PRODUCER_THREADS);
-	//		//				}
-	//		//			}
-	//		//		}
-	//
-	//	}
 
 	/*
 	 * This method *must* be allowed to terminate. If it stays in an endless
@@ -599,7 +548,7 @@ public class RabbitMQProducerController {
 		while (rabbitMQConsumerController.acquiredMessageHandlerPermits() > 0) {
 
 			/*
-			 * The start() method for the producer threads is called repeatedly
+			 * A request to start the producer threads is made repeatedly
 			 * in this loop. This is to ensure that these threads keep running
 			 * while we wait for all message handlers to finish processing
 			 * their incoming messages. There is no known reason
@@ -609,7 +558,8 @@ public class RabbitMQProducerController {
 			 * for the message handlers to finish their processing.
 			 */
 			//TODO This does not handle the case where we *want* to shut down without waiting for the message handlers to finish, but will this ever be needed?
-			start();	// call repeatedly, just in case
+			//			start();	// call repeatedly, just in case
+			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
 			logger.debug("{} message handlers still processing incoming messages...",
 					rabbitMQConsumerController.acquiredMessageHandlerPermits());
@@ -648,7 +598,7 @@ public class RabbitMQProducerController {
 		while (messageBlockingQueue.size() > 0) {
 
 			/*
-			 * The start() method for the producer threads is called repeatedly
+			 * A request to start the producer threads is made repeatedly
 			 * in this loop. This is to ensure that these threads keep running
 			 * while we wait for the queue to empty. There is no known reason
 			 * why this should be be necessary - this is just defensive
@@ -657,7 +607,8 @@ public class RabbitMQProducerController {
 			 * for the queue to empty.
 			 */
 			//TODO This does not handle the case where we *want* to shut down without emptying the queue, but will this ever be needed?
-			this.start();	// call repeatedly, just in case
+			//			this.start();	// call repeatedly, just in case
+			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
 			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
 					messageBlockingQueue.size());

@@ -300,27 +300,21 @@ public class RabbitMQConsumerController {
 
 	}
 
-	/*
-	 * @Timout is used to implement a programmatic delay on application startup
-	 * before the MessageMQ consumer thread is started. This method can also be
-	 * called directly, i.e., not via the EJB timer service.
-	*/
+	/**
+	 * Starts the MessageMQ consumer thread(s).
+	 * 
+	 * This method is annotated with @Timout to implement a programmatic delay 
+	 * on application startup before the MessageMQ consumer thread(s) is(are) 
+	 * started. This method can also be called directly, i.e., not via the EJB 
+	 * timer service.
+	 */
 	@Timeout
 	@Lock(LockType.WRITE)
 	public void start() {
 		logger.info("Request received to start RabbitMQ consumer thread");
-		/*
-		 * This test avoids starting the producer thread(s) when we know they
-		 * will not function correctly.
-		 */
-		if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
-			logger.debug("Calling heartBeat()...");
-			this.heartBeat();	// will start consumer thread(s), if necessary
-		} else {
-			logger.error("{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-					NUM_RABBITMQ_CONSUMER_THREADS);
-		}
+		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
+		logger.debug("Calling heartBeat()...");
+		this.heartBeat();	// will start consumer thread(s), if necessary
 	}
 
 	@Schedule(second = "*/4", minute = "*", hour = "*")
@@ -396,51 +390,8 @@ public class RabbitMQConsumerController {
 					}
 				}
 			}
-
 		}
-
 	}
-
-	//	@Lock(LockType.WRITE)
-	//	public void stop() {
-	//		logger.info("Request received to stop RabbitMQ consumer thread(s)");
-	//
-	//		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
-	//
-	//		/*
-	//		 * Signal the RabbitMQ consumer thread(s) so they can check the state
-	//		 * set in this thread to see if they should self-terminate.
-	//		 * 
-	//		 * I have commented out this code to avoid the problem where the target
-	//		 * thread may be in the act of processing a message, in which case the 
-	//		 * interrupt will cause the thread to abort the processing, i.e., it
-	//		 * won't be necessarily blocked waiting to receive the next message, 
-	//		 * which was the original idea of how this interrupt was to be used; 
-	//		 * hence, the message will probably we be lost unless some very fancy 
-	//		 * book keeping is done.
-	//		 */
-	//		//		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-	//		//			if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
-	//		//				logger.debug("Interrupting the RabbitMQ consumer thread...");
-	//		//				rabbitMQConsumerThread.interrupt();
-	//		//			}
-	//		//		} else {
-	//		//			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
-	//		//				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-	//		//					if (rabbitMQConsumerThreads.get(threadIndex) != null
-	//		//							&& rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
-	//		//						logger.debug("Interrupting RabbitMQ consumer thread {}...", threadIndex);
-	//		//						rabbitMQConsumerThreads.get(threadIndex).interrupt();
-	//		//					}
-	//		//				} else {
-	//		//					logger.error(
-	//		//							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-	//		//							NUM_RABBITMQ_CONSUMER_THREADS);
-	//		//				}
-	//		//			}
-	//		//		}
-	//
-	//	}
 
 	/*
 	 * This method *must* be allowed to terminate. If it stays in an endless

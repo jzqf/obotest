@@ -3,7 +3,6 @@ package com.qfree.obotest.servlet.rabbitmq;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-import javax.ejb.EJB;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -14,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 
 @WebServlet(description = "Starts the RabbitMQ consumer thread", urlPatterns = { "/start_rabbitmq_consumer" })
 public class RabbitMQStartConsumerServlet extends HttpServlet {
@@ -21,8 +21,8 @@ public class RabbitMQStartConsumerServlet extends HttpServlet {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQStartConsumerServlet.class);
 
-	@EJB
-	RabbitMQConsumerController rabbitMQConsumerController;
+	//	@EJB
+	//	RabbitMQConsumerController rabbitMQConsumerController;
 
 	public RabbitMQStartConsumerServlet() {
 		super();
@@ -49,8 +49,10 @@ public class RabbitMQStartConsumerServlet extends HttpServlet {
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
-		logger.debug("Calling rabbitMQConsumerController.start()...");
-		rabbitMQConsumerController.start();
+		//		logger.debug("Calling rabbitMQConsumerController.start()...");
+		//		rabbitMQConsumerController.start();
+		logger.debug("Setting RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING...");
+		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
 
 		response.setContentType("text/html;charset=UTF-8");
 		// PrintWriter out = response.getWriter();
