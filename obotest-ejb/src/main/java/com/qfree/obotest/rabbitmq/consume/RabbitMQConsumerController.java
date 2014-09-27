@@ -431,9 +431,7 @@ public class RabbitMQConsumerController {
 				}
 			}
 		} else {
-			// TODO This is slightly more efficient and a little clearer. Use it when I have time to test it.
-			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-			for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
+			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
 				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
 					if (rabbitMQConsumerThreads.get(threadIndex) != null) {
 						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
