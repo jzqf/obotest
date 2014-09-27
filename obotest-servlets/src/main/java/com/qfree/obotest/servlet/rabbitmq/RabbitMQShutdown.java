@@ -13,7 +13,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
 @WebServlet(description = "Shuts down both the RabbitMQ consumer and producer threads in an orderly fashion",
@@ -23,8 +22,8 @@ public class RabbitMQShutdown extends HttpServlet {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQShutdown.class);
 
-	@EJB
-	RabbitMQConsumerController rabbitMQConsumerController;
+	//	@EJB
+	//	RabbitMQConsumerController rabbitMQConsumerController;
 
 	@EJB
 	RabbitMQProducerController rabbitMQProducerController;
@@ -54,28 +53,28 @@ public class RabbitMQShutdown extends HttpServlet {
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
-		logger.debug("rabbitMQConsumerController.acquiredMessageHandlerPermits() = {}",
-				rabbitMQConsumerController.acquiredMessageHandlerPermits());
+		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
+				rabbitMQProducerController.acquiredMessageHandlerPermits());
 
 		logger.debug("Calling rabbitMQProducerController.stopConsumerThreadsAndWaitForTermination()...");
 		rabbitMQProducerController.stopConsumerThreadsAndWaitForTermination();
 
-		//		logger.debug("rabbitMQConsumerController.acquiredMessageHandlerPermits() = {}",
-		//				rabbitMQConsumerController.acquiredMessageHandlerPermits());
+		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
+		//				rabbitMQProducerController.acquiredMessageHandlerPermits());
 		//		logger.debug("Sleeping 0 seconds...");
 		//		long longSleep = 2000;
 		//		try {
 		//			Thread.sleep(longSleep);
 		//		} catch (InterruptedException e) {
 		//		}
-		logger.debug("rabbitMQConsumerController.acquiredMessageHandlerPermits() = {}",
-				rabbitMQConsumerController.acquiredMessageHandlerPermits());
+		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
+				rabbitMQProducerController.acquiredMessageHandlerPermits());
 
 		logger.debug("Calling rabbitMQProducerController.waitForIncomingMessageHandlerThreadsToFinish()...");
 		rabbitMQProducerController.waitForIncomingMessageHandlerThreadsToFinish();	//TODO Check if this is thread-safe or if we need "volatile"
 
-		logger.debug("rabbitMQConsumerController.acquiredMessageHandlerPermits() = {}",
-				rabbitMQConsumerController.acquiredMessageHandlerPermits());
+		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
+				rabbitMQProducerController.acquiredMessageHandlerPermits());
 
 		logger.debug("{} elements left in messageBlockingQueue.",
 				RabbitMQProducerController.messageBlockingQueue.size());

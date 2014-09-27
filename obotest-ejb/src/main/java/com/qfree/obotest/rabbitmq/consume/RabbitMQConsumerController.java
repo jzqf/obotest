@@ -104,7 +104,7 @@ public class RabbitMQConsumerController {
 	 * threads and any Semaphore object needs to be initialized with the 
 	 * maximum number of permits that it will allow to be acquired.
 	 */
-	private static final int MAX_MESSAGE_HANDLERS = 100;
+	public static final int MAX_MESSAGE_HANDLERS = 100;
 
 	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 
@@ -208,19 +208,20 @@ public class RabbitMQConsumerController {
 	//		return true;
 	//	}
 
-	/**
-	 * Returns the number of message handler permits currently acquired. This
-	 * represents the number of message handlers threads that are currently
-	 * processing messages consumed from a RabbitMQ broker. The threads are 
-	 * started automatically by the Java EE application container as the target
-	 * of CDI events that are fired by RabbitMQ message consumer threads.
-	 * 
-	 * @return the number of message handler permits currently acquired
-	 */
-	@Lock(LockType.READ)
-	public int acquiredMessageHandlerPermits() {
-		return MAX_MESSAGE_HANDLERS - RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits();
-	}
+	//	/**
+	//	 * Returns the number of message handler permits currently acquired. This
+	//	 * represents the number of message handlers threads that are currently
+	//	 * processing messages consumed from a RabbitMQ broker. The threads are 
+	//	 * started automatically by the Java EE application container as the target
+	//	 * of CDI events that are fired by RabbitMQ message consumer threads.
+	//	 * 
+	//	 * @return the number of message handler permits currently acquired
+	//	 */
+	//	@Lock(LockType.READ)
+	//	public int acquiredMessageHandlerPermits() {
+	//		return RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+	//				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits();
+	//	}
 
 	/*
 	 * @Startup ensures that this method is called when the application starts 

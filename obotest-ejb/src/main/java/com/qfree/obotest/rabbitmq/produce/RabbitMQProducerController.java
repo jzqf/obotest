@@ -113,8 +113,8 @@ public class RabbitMQProducerController {
 	@HelperBean2
 	RabbitMQProducerHelper messageProducerHelperBean2;	// used by the second thread
 
-	@Inject
-	RabbitMQConsumerController rabbitMQConsumerController;	// used in @PreDestroy - eliminate if possible
+	//	@Inject
+	//	RabbitMQConsumerController rabbitMQConsumerController;	// used in @PreDestroy - eliminate if possible
 
 	public static volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
 
@@ -545,7 +545,7 @@ public class RabbitMQProducerController {
 	public void waitForIncomingMessageHandlerThreadsToFinish() {
 
 		long loopTime = 0;
-		while (rabbitMQConsumerController.acquiredMessageHandlerPermits() > 0) {
+		while (acquiredMessageHandlerPermits() > 0) {
 
 			/*
 			 * A request to start the producer threads is made repeatedly
@@ -562,7 +562,7 @@ public class RabbitMQProducerController {
 			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
 			logger.debug("{} message handlers still processing incoming messages...",
-					rabbitMQConsumerController.acquiredMessageHandlerPermits());
+					acquiredMessageHandlerPermits());
 
 			loopTime += WAITING_LOOP_SLEEP_MS;
 			try {
@@ -578,12 +578,12 @@ public class RabbitMQProducerController {
 
 		}
 
-		if (rabbitMQConsumerController.acquiredMessageHandlerPermits() == 0) {
+		if (acquiredMessageHandlerPermits() == 0) {
 			logger.debug("All message handlers have finished processing their incoming messages");
 		} else {
 			logger.warn(
 					"{} message handlers did not finished processing their incoming messages. These messages will be lost!",
-					rabbitMQConsumerController.acquiredMessageHandlerPermits());
+					acquiredMessageHandlerPermits());
 		}
 
 	}
@@ -714,4 +714,20 @@ public class RabbitMQProducerController {
 		//		}
 
 	}
+
+	/**
+	 * Returns the number of message handler permits currently acquired. This
+	 * represents the number of message handlers threads that are currently
+	 * processing messages consumed from a RabbitMQ broker. The threads are 
+	 * started automatically by the Java EE application container as the target
+	 * of CDI events that are fired by RabbitMQ message consumer threads.
+	 * 
+	 * @return the number of message handler permits currently acquired
+	 */
+	@Lock(LockType.READ)
+	public int acquiredMessageHandlerPermits() {
+		return RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits();
+	}
+
 }
