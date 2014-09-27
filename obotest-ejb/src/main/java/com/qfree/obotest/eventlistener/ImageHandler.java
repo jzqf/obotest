@@ -2,6 +2,7 @@ package com.qfree.obotest.eventlistener;
 
 import java.io.Serializable;
 
+import javax.annotation.PreDestroy;
 import javax.ejb.Asynchronous;
 import javax.ejb.LocalBean;
 import javax.ejb.Stateless;
@@ -32,5 +33,10 @@ public class ImageHandler implements Serializable {
 		//		} catch (InterruptedException e) {
 		//		}
 		logger.debug("Finished processing image: {}...", event.toString());
+	}
+
+	@PreDestroy
+	public void preDestroy() {
+		logger.info("This bean is going away...");
 	}
 }

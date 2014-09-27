@@ -1,4 +1,4 @@
-package com.qfree.obotest.rabbitmq.consume;
+package com.qfree.obotest.rabbitmq;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;

@@ -6,7 +6,7 @@ import javax.ejb.LocalBean;
 import javax.ejb.Singleton;
 import javax.enterprise.inject.Alternative;
 
-import com.qfree.obotest.rabbitmq.consume.HelperBean2;
+import com.qfree.obotest.rabbitmq.HelperBean2;
 
 /*
  * This class is essentially identical to MessageConsumerHelperImageTestBean1.

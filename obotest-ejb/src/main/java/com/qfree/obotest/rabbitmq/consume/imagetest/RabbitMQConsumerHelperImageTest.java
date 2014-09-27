@@ -44,7 +44,7 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerHelperImageTest.class);
 
 	private static final String IMAGE_QUEUE_NAME = "image_queue";
-	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 5000;
+	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 1000;
 
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 

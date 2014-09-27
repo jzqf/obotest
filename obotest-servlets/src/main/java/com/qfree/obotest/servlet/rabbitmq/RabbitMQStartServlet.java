@@ -3,6 +3,7 @@ package com.qfree.obotest.servlet.rabbitmq;
 import java.io.IOException;
 import java.io.PrintWriter;
 
+import javax.ejb.EJB;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -13,18 +14,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
-@WebServlet(description = "Starts the RabbitMQ consumer thread", urlPatterns = { "/start_rabbitmq_consumer" })
-public class RabbitMQStartConsumerServlet extends HttpServlet {
+@WebServlet(description = "Starts both the RabbitMQ consumer and producer threads in an orderly fashion",
+		urlPatterns = { "/start_rabbitmq" })
+public class RabbitMQStartServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 
-	private static final Logger logger = LoggerFactory.getLogger(RabbitMQStartConsumerServlet.class);
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQStartServlet.class);
 
-	//	@EJB
-	//	RabbitMQConsumerController rabbitMQConsumerController;
+	@EJB
+	RabbitMQConsumerController rabbitMQConsumerController;
 
-	public RabbitMQStartConsumerServlet() {
+	@EJB
+	RabbitMQProducerController rabbitMQProducerController;
+
+	public RabbitMQStartServlet() {
 		super();
 	}
 
@@ -49,10 +54,15 @@ public class RabbitMQStartConsumerServlet extends HttpServlet {
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
-		//		logger.debug("Calling rabbitMQConsumerController.start()...");
-		//		rabbitMQConsumerController.start();
-		logger.debug("Setting RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING...");
-		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
+		logger.debug("Calling rabbitMQProducerController.start()...");
+		rabbitMQProducerController.start();
+		//		logger.debug("Setting RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING...");
+		//		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+
+		logger.debug("Calling rabbitMQConsumerController.start()...");
+		rabbitMQConsumerController.start();
+		//		logger.debug("Setting RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING...");
+		//		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
 
 		response.setContentType("text/html;charset=UTF-8");
 		// PrintWriter out = response.getWriter();
@@ -62,7 +72,7 @@ public class RabbitMQStartConsumerServlet extends HttpServlet {
 			out.println("<title>RabbitMQ</title>");
 			out.println("</head>");
 			out.println("<body>");
-			out.println("<h3>RabbitMQ consumer signalled to start</h3>");
+			out.println("<h3>RabbitMQ consumer and producer signalled to start</h3>");
 			out.println("</body>");
 			out.println("</html>");
 		} catch (Exception e) {
@@ -71,7 +81,7 @@ public class RabbitMQStartConsumerServlet extends HttpServlet {
 	}
 
 	public String getServletInfo() {
-		return "Signals the RabbitMQ consumer thread to start";
+		return "Signals the RabbitMQ consumer and producer threads to start in an orderly fashion";
 	}
 
 }

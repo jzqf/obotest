@@ -1,12 +1,13 @@
-package com.qfree.obotest.rabbitmq.consume;
+package com.qfree.obotest.rabbitmq.produce;
 
 import java.io.IOException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerStates;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerStates;
+//TODO This must be eliminated or updated to something related to producing:
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
 
@@ -19,19 +20,19 @@ import com.rabbitmq.client.ShutdownSignalException;
  */
 //@Stateless
 //@LocalBean
-public class RabbitMQConsumer implements Runnable {
+public class RabbitMQProducer implements Runnable {
 
-	private volatile RabbitMQConsumerStates state = RabbitMQConsumerStates.STOPPED;
+	private volatile RabbitMQProducerStates state = RabbitMQProducerStates.STOPPED;
 
-	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumer.class);
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducer.class);
 
-	RabbitMQConsumerHelper messageConsumerHelper = null;
+	RabbitMQProducerHelper messageProducerHelper = null;
 
-	public RabbitMQConsumerStates getState() {
+	public RabbitMQProducerStates getState() {
 		return state;
 	}
 
-	public void setState(RabbitMQConsumerStates state) {
+	public void setState(RabbitMQProducerStates state) {
 		this.state = state;
 	}
 
@@ -40,41 +41,42 @@ public class RabbitMQConsumer implements Runnable {
 	 * even though all instances of this bean used by the application are 
 	 * created with the "new" operator and use a constructor with arguments.
 	 */
-	public RabbitMQConsumer() {
+	public RabbitMQProducer() {
 	}
 
-	public RabbitMQConsumer(RabbitMQConsumerHelper messageConsumerHelper) {
+	public RabbitMQProducer(RabbitMQProducerHelper messageProducerHelper) {
 		super();
-		this.messageConsumerHelper = messageConsumerHelper;
+		this.messageProducerHelper = messageProducerHelper;
 	}
 
 	@Override
 	public void run() {
 
-		logger.debug("Starting RabbitMQ message consumer...");
-		this.setState(RabbitMQConsumerStates.RUNNING);
+		logger.debug("Starting RabbitMQ message producer...");
+		this.setState(RabbitMQProducerStates.RUNNING);
 
 		try {
-			messageConsumerHelper.openConnection();
+			messageProducerHelper.openConnection();
 			try {
-				messageConsumerHelper.openChannel();
+				messageProducerHelper.openChannel();
 				try {
 
-					messageConsumerHelper.configureConsumer();
-					logger.debug("Waiting for image(s).");
+					//TODO This must be eliminated or updated to something related to producing:
+					//					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
 
 					while (true) {
 						try {
-							messageConsumerHelper.handleDeliveries();
+							messageProducerHelper.handlePublish();
 						} catch (InterruptedException e) {
 							/*
-							 * RabbitMQConsumerController is probably requesting that this
+							 * RabbitMQProducerController is probably requesting that this
 							 * thread be shut down. This is checked below.
 							 */
 							logger.info("InterruptedException received.");
 						} catch (ShutdownSignalException e) {
 							logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
 							break;
+							//TODO Either eliminate this catch block or rename "consumer" to something else here in this message
 						} catch (ConsumerCancelledException e) {
 							logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.", e);
 							break;
@@ -87,13 +89,14 @@ public class RabbitMQConsumer implements Runnable {
 						}
 
 						logger.trace("Checking if shutdown was requested...");
-						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
+						if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
 							logger.info("Shutdown request detected. This thread will terminate.");
 							break;
 						}
 					}
 
-				} catch (IOException e) {
+				} catch (Exception e) {
+					//TODO Either eliminate this try block or rename "consumer" to something else here in this message
 					logger.error(
 							"Exception thrown setting up consumer object for RabbitMQ channel. This thread will terminate.",
 							e);
@@ -105,7 +108,7 @@ public class RabbitMQConsumer implements Runnable {
 						e);
 			} finally {
 				logger.info("Closing RabbitMQ channel...");
-				messageConsumerHelper.closeChannel();
+				messageProducerHelper.closeChannel();
 			}
 
 		} catch (IOException e) {
@@ -132,14 +135,14 @@ public class RabbitMQConsumer implements Runnable {
 			 */
 			logger.info("Closing RabbitMQ connection...");
 			try {
-				messageConsumerHelper.closeConnection();
+				messageProducerHelper.closeConnection();
 			} catch (IOException e) {
 				logger.error("Exception caught closing RabbitMQ connection", e);
 			}
 		}
 
 		logger.debug("Thread exiting");
-		this.setState(RabbitMQConsumerStates.STOPPED);
+		this.setState(RabbitMQProducerStates.STOPPED);
 
 	}
 

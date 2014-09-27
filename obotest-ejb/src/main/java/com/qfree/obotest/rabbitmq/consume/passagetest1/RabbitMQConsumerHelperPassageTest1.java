@@ -2,7 +2,6 @@ package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
 
-import javax.ejb.Asynchronous;
 import javax.ejb.Lock;
 import javax.ejb.LockType;
 import javax.enterprise.event.Event;
@@ -19,9 +18,7 @@ import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.QueueingConsumer;
-import com.rabbitmq.client.ShutdownSignalException;
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
 
 /*
@@ -47,7 +44,12 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerHelperPassageTest1.class);
 
 	private static final String PASSAGE_QUEUE_NAME = "passage_queue_test1";
-	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 5000;
+	/*
+	 * Since this thread is never interrupted via Thread.interrupt(), we don't 
+	 * want to block for any length of time so that this thread can respond to 
+	 * state changes in a timely fashion. So this timeout should be "small".
+	 */
+	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 1000;
 
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
@@ -115,8 +117,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		channel.basicConsume(PASSAGE_QUEUE_NAME, false, consumer);
 	}
 
-	public void handleDeliveries() throws ShutdownSignalException,
-			ConsumerCancelledException, InterruptedException, IOException {
+	public void handleDeliveries() throws InterruptedException, IOException, InvalidProtocolBufferException {
+
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
@@ -128,7 +130,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			if (false) {
 
 				/*
-				 * Processing here in this method.
+				 * Process the message here in this method.
+				 * TODO Update this to publish a message or place and outgoing method in the producer queue, as in PassageTest1Handler?
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
@@ -138,8 +141,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			} else {
 
 				/*
-				 * Processing in another thread theat receives a CDI event that
-				 * is sent from this thread.
+				 * Process the message in another thread that receives a CDI 
+				 * event that is sent from this thread.
 				 */
 
 				/*
@@ -169,6 +172,24 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * is fired back to the appropriate thread that has the reference to the correct 
 				 * channel on which the acknowledgement must be sent.
 				 * 
+				 * ANOTHER IDEA TO SOLVE THIS PROBLEM:
+				 * 
+				 * 1. Send the "delivery tag" along with rest of the event 
+				 *    payload to the "Observer" method (similar to above)
+				 * 
+				 * 2. After the "Observer" thread that receives the event that
+				 *    is fired to it, it places the delivery tag into one of two
+				 *    blocking queues: 
+				 *        a. One queue for successfully processed messages
+				 *        b. One queue for messages *not* successfully processed.
+				 *    It will be the responsibility of another thread to process
+				 *    the entries in these queues to acknowledge the messages
+				 *    that were successfully processed (this means that the 
+				 *    number of unacknowledged messages might build up 
+				 *    somewhat), and to do whatever it can with the message
+				 *    delivery tags for messages that were *not* processed
+				 *    successfully. 
+				 * 
 				 * It is probably best to just wait and deal with this functionality at
 				 * a later time, since it may never be needed.
 				 */
@@ -193,7 +214,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 * waiting the timeout period. This in perfectly normal. The 
 			 * timeout is implemented so that the calling thread can check 
 			 * whether there has been a request made for it to terminate or 
-			 * whatever. 
+			 * whatever, even if this thread is not interrupted. 
 			 */
 			logger.trace("[{}]: consumer.nextDelivery() timed out after {} ms",
 					subClassName, RABBITMQ_CONSUMER_TIMEOUT_MS);
@@ -220,11 +241,11 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * 
 	 * TODO Investigate if/how we can get information on how the event was processed by the receiver.
 	 * 
-	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method?
+	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method????!!!
 	 * 
 	 */
-	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. i SHOULD PROBABLY REMOVE IT HERE AND IN THE OTHER CLASS
-	@Asynchronous
+	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. I SHOULD PROBABLY REMOVE IT HERE AND IN THE OTHER CLASS
+	//	@Asynchronous
 	@Lock(LockType.WRITE)
 	private void firePassageEvent(byte[] passageBytes) {
 		logger.debug("[{}]: Creating event payload for passage [{} bytes]", subClassName, passageBytes.length);

@@ -2,8 +2,7 @@ package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
 
-import com.rabbitmq.client.ConsumerCancelledException;
-import com.rabbitmq.client.ShutdownSignalException;
+import com.google.protobuf.InvalidProtocolBufferException;
 
 public interface RabbitMQConsumerHelper {
 
@@ -17,7 +16,6 @@ public interface RabbitMQConsumerHelper {
 
 	public void configureConsumer() throws IOException;
 
-	public void handleDeliveries() throws ShutdownSignalException,
-			ConsumerCancelledException, InterruptedException, IOException;
+	public void handleDeliveries() throws InterruptedException, IOException, InvalidProtocolBufferException;
 
 }
