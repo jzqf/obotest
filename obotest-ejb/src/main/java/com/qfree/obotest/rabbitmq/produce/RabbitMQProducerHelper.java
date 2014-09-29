@@ -14,7 +14,7 @@ public interface RabbitMQProducerHelper {
 	public void closeChannel() throws IOException;
 
 	//TODO Is configureProducer() needed at all?
-	//	public void configureProducer(BlockingQueue<byte[]> messageBlockingQueue) throws IOException;
+	//	public void configureProducer(BlockingQueue<byte[]> producerMsgQueue) throws IOException;
 
 	//TODO Rename handlePublish --> ?????????????????????????????????
 	public void handlePublish() throws InterruptedException, IOException;

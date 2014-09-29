@@ -64,7 +64,7 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	//TODO This must be eliminated or updated to something related to producing:
 	//	QueueingConsumer consumer = null;
 
-	//	BlockingQueue<byte[]> messageBlockingQueue = null;
+	//	BlockingQueue<byte[]> producerMsgQueue = null;
 
     @Inject
 	@PassageQualifier
@@ -117,24 +117,24 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 		}
 	}
 
-	//TODO Should we set this.messageBlockingQueue via a setter instead of this method?
+	//TODO Should we set this.producerMsgQueue via a setter instead of this method?
 	// If so, then we can consider eliminating this configureProducer() method.
 	//	@Override
-	//	public void configureProducer(BlockingQueue<byte[]> messageBlockingQueue) {
+	//	public void configureProducer(BlockingQueue<byte[]> producerMsgQueue) {
 	//		logger.debug("[{}]: Setting the blocking queue that will be used by this producer thread: {}", subClassName,
-	//				messageBlockingQueue);
-	//		this.messageBlockingQueue = messageBlockingQueue;
+	//				producerMsgQueue);
+	//		this.producerMsgQueue = producerMsgQueue;
 	//	}
 
 	@Override
 	public void handlePublish() throws InterruptedException, IOException {
 
-		logger.trace("[{}]: messageBlockingQueue.size() = {}", subClassName,
-				RabbitMQProducerController.messageBlockingQueue.size());
-		logger.trace("[{}]: RabbitMQProducerController.messageBlockingQueue.remainingCapacity() = {}", subClassName,
-				RabbitMQProducerController.messageBlockingQueue.remainingCapacity());
+		logger.trace("[{}]: producerMsgQueue.size() = {}", subClassName,
+				RabbitMQProducerController.producerMsgQueue.size());
+		logger.trace("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}", subClassName,
+				RabbitMQProducerController.producerMsgQueue.remainingCapacity());
 
-		byte[] passageBytes = RabbitMQProducerController.messageBlockingQueue.poll(RABBITMQ_PRODUCER_TIMEOUT_MS,
+		byte[] passageBytes = RabbitMQProducerController.producerMsgQueue.poll(RABBITMQ_PRODUCER_TIMEOUT_MS,
 				TimeUnit.MILLISECONDS);
 			if (passageBytes!=null) {
 
@@ -143,11 +143,11 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
 				logger.debug("[{}]: Published RabbitMQ passage message", subClassName);
 
-			logger.debug("[{}]: RabbitMQProducerController.messageBlockingQueue.size() = {}", subClassName,
-					RabbitMQProducerController.messageBlockingQueue.size());
-			logger.debug("[{}]: RabbitMQProducerController.messageBlockingQueue.remainingCapacity() = {}",
+			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.size() = {}", subClassName,
+					RabbitMQProducerController.producerMsgQueue.size());
+			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
 					subClassName,
-					RabbitMQProducerController.messageBlockingQueue.remainingCapacity());
+					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
 
 				//				logger.debug("[{}]: Sleeping for 2000 ms...", subClassName);
 				//				Thread.sleep(2000);
@@ -161,7 +161,7 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				 * terminate or whatever, even if this thread is not 
 				 * interrupted. 
 				 */
-			logger.trace("[{}]: RabbitMQProducerController.messageBlockingQueue.poll() timed out after {} ms",
+			logger.trace("[{}]: RabbitMQProducerController.producerMsgQueue.poll() timed out after {} ms",
 						subClassName, RABBITMQ_PRODUCER_TIMEOUT_MS);
 			}
 	}

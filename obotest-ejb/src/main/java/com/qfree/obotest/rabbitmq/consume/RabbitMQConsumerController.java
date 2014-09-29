@@ -87,7 +87,7 @@ public class RabbitMQConsumerController {
 		STOPPED, RUNNING
 	};
 
-	public enum RabbitMQConsumerStates {
+	public enum RabbitMQConsumerThreadStates {
 		STOPPED, RUNNING
 	};
 
@@ -127,9 +127,9 @@ public class RabbitMQConsumerController {
 	 * such as from the RabbitMQProducerController singleton bean thread, as
 	 * well as from the servlet that stops the consumer threads.
 	 */
-	//	private volatile RabbitMQConsumer rabbitMQConsumer = null;
+	//	private volatile RabbitMQConsumerRunnable rabbitMQConsumer = null;
 	//	private volatile Thread rabbitMQConsumerThread = null;
-	public static volatile RabbitMQConsumer rabbitMQConsumer = null;
+	public static volatile RabbitMQConsumerRunnable rabbitMQConsumerRunnable = null;
 	public static volatile Thread rabbitMQConsumerThread = null;
 	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
 	/*
@@ -142,12 +142,12 @@ public class RabbitMQConsumerController {
 	 * other threads, such as from the RabbitMQProducerController singleton bean
 	 * thread, as well as from the servlet that stops the consumer threads.
 	 */
-	//	private volatile List<RabbitMQConsumer> rabbitMQConsumers = null;
+	//	private volatile List<RabbitMQConsumerRunnable> rabbitMQConsumers = null;
 	//	private volatile List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
 	//	private volatile List<Thread> rabbitMQConsumerThreads = null;
-	public static final List<RabbitMQConsumer> rabbitMQConsumers =
-			Collections.synchronizedList(new ArrayList<RabbitMQConsumer>());
-	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders =
+	public static final List<RabbitMQConsumerRunnable> rabbitMQConsumerRunnables =
+			Collections.synchronizedList(new ArrayList<RabbitMQConsumerRunnable>());
+	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadHelpers =
 			Collections.synchronizedList(new ArrayList<RabbitMQConsumerHelper>());
 	public static final List<Thread> rabbitMQConsumerThreads =
 			Collections.synchronizedList(new ArrayList<Thread>());
@@ -275,9 +275,9 @@ public class RabbitMQConsumerController {
 			 */
 		} else {
 			// Initialize lists with NUM_RABBITMQ_CONSUMER_THREADS null values each.
-			synchronized (rabbitMQConsumers) {
+			synchronized (rabbitMQConsumerRunnables) {
 				for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-					rabbitMQConsumers.add(null);
+					rabbitMQConsumerRunnables.add(null);
 					rabbitMQConsumerThreads.add(null);
 				}
 			}
@@ -288,9 +288,9 @@ public class RabbitMQConsumerController {
 				// will fire the CDI events from the RabbitMQ consumer threads that
 				// are managed by the current singleton session bean
 				//				rabbitMQConsumerThreadImageEventSenders = new ArrayList<>();
-				rabbitMQConsumerThreadImageEventSenders.add(messageConsumerHelperBean1);
+				rabbitMQConsumerThreadHelpers.add(messageConsumerHelperBean1);
 				if (NUM_RABBITMQ_CONSUMER_THREADS > 1) {
-					rabbitMQConsumerThreadImageEventSenders.add(messageConsumerHelperBean2);
+					rabbitMQConsumerThreadHelpers.add(messageConsumerHelperBean2);
 				}
 			} else {
 				logger.error(
@@ -335,15 +335,15 @@ public class RabbitMQConsumerController {
 				if (rabbitMQConsumerThread == null || !rabbitMQConsumerThread.isAlive()) {
 
 					logger.info("Starting RabbitMQ consumer thread...");
-					rabbitMQConsumer = new RabbitMQConsumer(messageConsumerHelperBean1);
-					rabbitMQConsumerThread = threadFactory.newThread(rabbitMQConsumer);
+					rabbitMQConsumerRunnable = new RabbitMQConsumerRunnable(messageConsumerHelperBean1);
+					rabbitMQConsumerThread = threadFactory.newThread(rabbitMQConsumerRunnable);
 					rabbitMQConsumerThread.start();
 
 				} else {
 					logger.trace("RabbitMQ consumer thread is already running");
 				}
 			} else {
-				synchronized (rabbitMQConsumers) {
+				synchronized (rabbitMQConsumerRunnables) {
 					for (int threadIndex = 0; threadIndex < rabbitMQConsumerThreads.size(); threadIndex++) {
 						logger.trace("Checking if RabbitMQ consumer thread {} is running...", threadIndex);
 
@@ -358,10 +358,10 @@ public class RabbitMQConsumerController {
 
 							logger.info("Starting RabbitMQ consumer thread {}...", threadIndex);
 
-							rabbitMQConsumers.set(threadIndex,
-									new RabbitMQConsumer(rabbitMQConsumerThreadImageEventSenders.get(threadIndex)));
+							rabbitMQConsumerRunnables.set(threadIndex,
+									new RabbitMQConsumerRunnable(rabbitMQConsumerThreadHelpers.get(threadIndex)));
 							rabbitMQConsumerThreads.set(threadIndex,
-									threadFactory.newThread(rabbitMQConsumers.get(threadIndex)));
+									threadFactory.newThread(rabbitMQConsumerRunnables.get(threadIndex)));
 							rabbitMQConsumerThreads.get(threadIndex).start();
 
 						} else {

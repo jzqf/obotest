@@ -6,7 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
-import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerStates;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerThreadStates;
 //TODO This must be eliminated or updated to something related to producing:
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
@@ -20,19 +20,19 @@ import com.rabbitmq.client.ShutdownSignalException;
  */
 //@Stateless
 //@LocalBean
-public class RabbitMQProducer implements Runnable {
+public class RabbitMQProducerRunnable implements Runnable {
 
-	private volatile RabbitMQProducerStates state = RabbitMQProducerStates.STOPPED;
+	private volatile RabbitMQProducerThreadStates state = RabbitMQProducerThreadStates.STOPPED;
 
-	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducer.class);
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducerRunnable.class);
 
 	RabbitMQProducerHelper messageProducerHelper = null;
 
-	public RabbitMQProducerStates getState() {
+	public RabbitMQProducerThreadStates getState() {
 		return state;
 	}
 
-	public void setState(RabbitMQProducerStates state) {
+	public void setState(RabbitMQProducerThreadStates state) {
 		this.state = state;
 	}
 
@@ -41,10 +41,10 @@ public class RabbitMQProducer implements Runnable {
 	 * even though all instances of this bean used by the application are 
 	 * created with the "new" operator and use a constructor with arguments.
 	 */
-	public RabbitMQProducer() {
+	public RabbitMQProducerRunnable() {
 	}
 
-	public RabbitMQProducer(RabbitMQProducerHelper messageProducerHelper) {
+	public RabbitMQProducerRunnable(RabbitMQProducerHelper messageProducerHelper) {
 		super();
 		this.messageProducerHelper = messageProducerHelper;
 	}
@@ -53,7 +53,7 @@ public class RabbitMQProducer implements Runnable {
 	public void run() {
 
 		logger.debug("Starting RabbitMQ message producer...");
-		this.setState(RabbitMQProducerStates.RUNNING);
+		this.setState(RabbitMQProducerThreadStates.RUNNING);
 
 		try {
 			messageProducerHelper.openConnection();
@@ -142,7 +142,7 @@ public class RabbitMQProducer implements Runnable {
 		}
 
 		logger.debug("Thread exiting");
-		this.setState(RabbitMQProducerStates.STOPPED);
+		this.setState(RabbitMQProducerThreadStates.STOPPED);
 
 	}
 

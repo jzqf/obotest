@@ -21,15 +21,15 @@ import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
 @Stateless
 @LocalBean
-public class PassageTest1Handler implements Serializable {
+public class ConsumerMsgHandlerPassageTest implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
 
-	private static final Logger logger = LoggerFactory.getLogger(PassageTest1Handler.class);
+	private static final Logger logger = LoggerFactory.getLogger(ConsumerMsgHandlerPassageTest.class);
 
-	public PassageTest1Handler() {
-		logger.debug("PassageTest1Handler instance created");
+	public ConsumerMsgHandlerPassageTest() {
+		logger.debug("{} instance created", ConsumerMsgHandlerPassageTest.class.getSimpleName());
 	}
 
 	@Asynchronous
@@ -97,10 +97,10 @@ public class PassageTest1Handler implements Serializable {
 
 	public boolean send(byte[] bytes) {
 
-		BlockingQueue<byte[]> messageBlockingQueue = RabbitMQProducerController.messageBlockingQueue;
+		BlockingQueue<byte[]> producerMsgQueue = RabbitMQProducerController.producerMsgQueue;
 
-		logger.debug("messageBlockingQueue.size() = {}", messageBlockingQueue.size());
-		logger.debug("messageBlockingQueue.remainingCapacity() = {}", messageBlockingQueue.remainingCapacity());
+		logger.debug("producerMsgQueue.size() = {}", producerMsgQueue.size());
+		logger.debug("producerMsgQueue.remainingCapacity() = {}", producerMsgQueue.remainingCapacity());
 
 		/*    
 		 * If the queue is not full this will enter the message into the queue 
@@ -117,8 +117,8 @@ public class PassageTest1Handler implements Serializable {
 		while (!success) {
 			try {
 				//TODO This will block forever while the queue is full. Is this OK?
-				//			success = messageBlockingQueue.offer(bytes);
-				success = messageBlockingQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+				//			success = producerMsgQueue.offer(bytes);
+				success = producerMsgQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
 				//TODO !!!!!!!!!! AT LEAST TEST: "PUBLISHER CONFIRMS" !!!!!!!!!
 

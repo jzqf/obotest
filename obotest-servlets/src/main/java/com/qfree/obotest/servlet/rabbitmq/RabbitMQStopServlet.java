@@ -78,10 +78,10 @@ public class RabbitMQStopServlet extends HttpServlet {
 		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
 		//				rabbitMQProducerController.acquiredMessageHandlerPermits());
 		//
-		//		logger.debug("{} elements left in messageBlockingQueue.",
-		//				RabbitMQProducerController.messageBlockingQueue.size());
+		//		logger.debug("{} elements left in producerMsgQueue.",
+		//				RabbitMQProducerController.producerMsgQueue.size());
 		//
-		//		logger.debug("\n\nWaiting for the messageBlockingQueue queue to empty...");
+		//		logger.debug("\n\nWaiting for the producerMsgQueue queue to empty...");
 		//		rabbitMQProducerController.waitForRabbitMQProducerQueueToEmpty();
 		//
 		//		logger.info("\n\nStopping the RabbitMQ producer threads...");

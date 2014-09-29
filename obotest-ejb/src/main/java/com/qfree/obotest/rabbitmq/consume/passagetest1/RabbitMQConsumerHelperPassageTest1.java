@@ -131,7 +131,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 				/*
 				 * Process the message here in this method.
-				 * TODO Update this to publish a message or place and outgoing method in the producer queue, as in PassageTest1Handler?
+				 * TODO Update this to publish a message or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();

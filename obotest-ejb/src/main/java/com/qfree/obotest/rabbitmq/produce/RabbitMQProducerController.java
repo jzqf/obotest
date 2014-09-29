@@ -1,5 +1,7 @@
 package com.qfree.obotest.rabbitmq.produce;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -64,11 +66,11 @@ public class RabbitMQProducerController {
 		STOPPED, RUNNING
 	};
 
-	public enum RabbitMQProducerStates {
+	public enum RabbitMQProducerThreadStates {
 		STOPPED, RUNNING
 	};
 
-	private static final int NUM_RABBITMQ_PRODUCER_THREADS = 1;
+	private static final int NUM_RABBITMQ_PRODUCER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_PRODUCER_MS = 2000;
 	private static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Make this smaller?
 	//	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
@@ -80,7 +82,7 @@ public class RabbitMQProducerController {
 	 * 
 	 *     boolean sent = send(byte[] bytes);
 	 */
-	public static final BlockingQueue<byte[]> messageBlockingQueue = new LinkedBlockingQueue<>(
+	public static final BlockingQueue<byte[]> producerMsgQueue = new LinkedBlockingQueue<>(
 			PRODUCER_BLOCKING_QUEUE_LENGTH);
 
 	@Resource
@@ -118,51 +120,54 @@ public class RabbitMQProducerController {
 	public static volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
 
 	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
-	private RabbitMQProducer rabbitMQProducer = null;
+	private RabbitMQProducerRunnable rabbitMQProducer = null;
 	private Thread rabbitMQProducerThread = null;
 	// NUM_RABBITMQ_PRODUCER_THREADS > 1:
 	// These are parallel lists (arrays could also be used). There will be one
 	// element in each list for each RabbitMQ producer thread to be started from
 	// this singleton session bean.
-	private final List<RabbitMQProducer> rabbitMQProducers = null;
-	private final List<RabbitMQProducerHelper> rabbitMQProducerThreadImageEventSenders = null;
-	private final List<Thread> rabbitMQProducerThreads = null;
+	private final List<RabbitMQProducerRunnable> rabbitMQProducerRunnables =
+			Collections.synchronizedList(new ArrayList<RabbitMQProducerRunnable>());
+	private final List<RabbitMQProducerHelper> rabbitMQProducerThreadHelpers =
+			Collections.synchronizedList(new ArrayList<RabbitMQProducerHelper>());
+	private final List<Thread> rabbitMQProducerThreads =
+			Collections.synchronizedList(new ArrayList<Thread>());
 
 	//	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
 	//	@Lock(LockType.READ)
-	//	public RabbitMQProducerStates getProducerState() {
+	//	public RabbitMQProducerThreadStates getProducerState() {
 	//		if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
 	//			if (rabbitMQProducer != null) {
 	//				return rabbitMQProducer.getState();
 	//			} else {
 	//				// This should never happen. Am I being too careful?
 	//				logger.error("rabbitMQProducer is null, but its thread seems to be alive");
-	//				return RabbitMQProducerStates.STOPPED;
+	//				return RabbitMQProducerThreadStates.STOPPED;
 	//			}
 	//		} else {
-	//			return RabbitMQProducerStates.STOPPED;
+	//			return RabbitMQProducerThreadStates.STOPPED;
 	//		}
 	//	}
 	//
 	//	// NUM_RABBITMQ_PRODUCER_THREADS > 1:
 	//	@Lock(LockType.READ)
-	//	public RabbitMQProducerStates getProducerState(int threadIndex) {
+	//	public RabbitMQProducerThreadStates getProducerState(int threadIndex) {
 	//		if (threadIndex < NUM_RABBITMQ_PRODUCER_THREADS) {
 	//			if (rabbitMQProducerThreads.get(threadIndex) != null && rabbitMQProducerThreads.get(threadIndex).isAlive()) {
-	//				if (rabbitMQProducers.get(threadIndex) != null) {
-	//					return rabbitMQProducers.get(threadIndex).getState();
+	//				if (rabbitMQProducerRunnables.get(threadIndex) != null) {
+	//					return rabbitMQProducerRunnables.get(threadIndex).getState();
 	//				} else {
 	//					// This should never happen. Am I being too careful?
 	//					logger.error("rabbitMQProducer {} is null, but its thread seems to be alive", threadIndex);
-	//					return RabbitMQProducerStates.STOPPED;
+	//					return RabbitMQProducerThreadStates.STOPPED;
 	//				}
 	//			} else {
-	//				return RabbitMQProducerStates.STOPPED;
+	//				return RabbitMQProducerThreadStates.STOPPED;
 	//			}
 	//		} else {
 	//			logger.error("threadIndex = {}, but NUM_RABBITMQ_PRODUCER_THREADS = {}",
 	//					threadIndex, NUM_RABBITMQ_PRODUCER_THREADS);
-	//			return RabbitMQProducerStates.STOPPED;	// simpler than throwing an exception :-)
+	//			return RabbitMQProducerThreadStates.STOPPED;	// simpler than throwing an exception :-)
 	//		}
 	//	}
 
@@ -206,7 +211,7 @@ public class RabbitMQProducerController {
 		} else {
 			// Initialize lists with NUM_RABBITMQ_PRODUCER_THREADS null values each.
 			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
-				rabbitMQProducers.add(null);
+				rabbitMQProducerRunnables.add(null);
 				rabbitMQProducerThreads.add(null);
 			}
 
@@ -215,9 +220,9 @@ public class RabbitMQProducerController {
 				// different singleton session bean in each element.  These beans
 				// will fire the CDI events from the RabbitMQ producer threads that
 				// are managed by the current singleton session bean
-				rabbitMQProducerThreadImageEventSenders.add(messageProducerHelperBean1);
+				rabbitMQProducerThreadHelpers.add(messageProducerHelperBean1);
 				if (NUM_RABBITMQ_PRODUCER_THREADS > 1) {
-					rabbitMQProducerThreadImageEventSenders.add(messageProducerHelperBean2);
+					rabbitMQProducerThreadHelpers.add(messageProducerHelperBean2);
 				}
 			} else {
 				logger.error(
@@ -296,7 +301,7 @@ public class RabbitMQProducerController {
 				if (rabbitMQProducerThread == null || !rabbitMQProducerThread.isAlive()) {
 
 					logger.info("Starting RabbitMQ producer thread...");
-					rabbitMQProducer = new RabbitMQProducer(messageProducerHelperBean1);
+					rabbitMQProducer = new RabbitMQProducerRunnable(messageProducerHelperBean1);
 					rabbitMQProducerThread = threadFactory.newThread(rabbitMQProducer);
 					rabbitMQProducerThread.start();
 
@@ -318,10 +323,10 @@ public class RabbitMQProducerController {
 
 						logger.info("Starting RabbitMQ producer thread {}...", threadIndex);
 
-						rabbitMQProducers.set(threadIndex,
-								new RabbitMQProducer(rabbitMQProducerThreadImageEventSenders.get(threadIndex)));
+						rabbitMQProducerRunnables.set(threadIndex,
+								new RabbitMQProducerRunnable(rabbitMQProducerThreadHelpers.get(threadIndex)));
 						rabbitMQProducerThreads.set(threadIndex,
-								threadFactory.newThread(rabbitMQProducers.get(threadIndex)));
+								threadFactory.newThread(rabbitMQProducerRunnables.get(threadIndex)));
 						rabbitMQProducerThreads.get(threadIndex).start();
 
 					} else {
@@ -382,7 +387,7 @@ public class RabbitMQProducerController {
 		 * the messages in this queue are published by the RabbitMQ producer 
 		 * threads.
 		 */
-		logger.info("Waiting for the messageBlockingQueue queue to empty...");
+		logger.info("Waiting for the producerMsgQueue queue to empty...");
 		waitForRabbitMQProducerQueueToEmpty();
 
 		/*
@@ -436,7 +441,7 @@ public class RabbitMQProducerController {
 
 		//		long loopTime = 0;
 		//		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-		//			while (getConsumerState() != RabbitMQConsumerStates.STOPPED) {
+		//			while (getConsumerState() != RabbitMQConsumerThreadStates.STOPPED) {
 		//				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
 		//				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
 		//				loopTime += WAITING_LOOP_SLEEP_MS;
@@ -452,7 +457,7 @@ public class RabbitMQProducerController {
 		//			}
 		//		} else {
 		//			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-		//				while (getConsumerState(threadIndex) != RabbitMQConsumerStates.STOPPED) {
+		//				while (getConsumerState(threadIndex) != RabbitMQConsumerThreadStates.STOPPED) {
 		//					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
 		//					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
 		//					loopTime += WAITING_LOOP_SLEEP_MS;
@@ -473,7 +478,7 @@ public class RabbitMQProducerController {
 
 	//	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
 	//	@Lock(LockType.READ)
-	//	private RabbitMQConsumerStates getConsumerState() {
+	//	private RabbitMQConsumerThreadStates getConsumerState() {
 	//		if (RabbitMQConsumerController.rabbitMQConsumerThread != null
 	//				&& RabbitMQConsumerController.rabbitMQConsumerThread.isAlive()) {
 	//			if (RabbitMQConsumerController.rabbitMQConsumer != null) {
@@ -481,16 +486,16 @@ public class RabbitMQProducerController {
 	//			} else {
 	//				// This should never happen. Am I being too careful?
 	//				logger.error("rabbitMQConsumer is null, but its thread seems to be alive");
-	//				return RabbitMQConsumerStates.STOPPED;
+	//				return RabbitMQConsumerThreadStates.STOPPED;
 	//			}
 	//		} else {
-	//			return RabbitMQConsumerStates.STOPPED;
+	//			return RabbitMQConsumerThreadStates.STOPPED;
 	//		}
 	//	}
 	//
 	//	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
 	//	@Lock(LockType.READ)
-	//	private RabbitMQConsumerStates getConsumerState(int threadIndex) {
+	//	private RabbitMQConsumerThreadStates getConsumerState(int threadIndex) {
 	//		if (threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS) {
 	//			if (RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex) != null
 	//					&& RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
@@ -499,15 +504,15 @@ public class RabbitMQProducerController {
 	//				} else {
 	//					// This should never happen. Am I being too careful?
 	//					logger.error("rabbitMQConsumer {} is null, but its thread seems to be alive", threadIndex);
-	//					return RabbitMQConsumerStates.STOPPED;
+	//					return RabbitMQConsumerThreadStates.STOPPED;
 	//				}
 	//			} else {
-	//				return RabbitMQConsumerStates.STOPPED;
+	//				return RabbitMQConsumerThreadStates.STOPPED;
 	//			}
 	//		} else {
 	//			logger.error("threadIndex = {}, but NUM_RABBITMQ_CONSUMER_THREADS = {}",
 	//					threadIndex, RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
-	//			return RabbitMQConsumerStates.STOPPED;	// simpler than throwing an exception :-)
+	//			return RabbitMQConsumerThreadStates.STOPPED;	// simpler than throwing an exception :-)
 	//		}
 	//	}
 
@@ -569,7 +574,7 @@ public class RabbitMQProducerController {
 	public void waitForRabbitMQProducerQueueToEmpty() {
 
 		long loopTime = 0;
-		while (messageBlockingQueue.size() > 0) {
+		while (producerMsgQueue.size() > 0) {
 
 			/*
 			 * A request to start the producer threads is made repeatedly
@@ -584,8 +589,8 @@ public class RabbitMQProducerController {
 			//			this.start();	// call repeatedly, just in case
 			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
-			logger.debug("{} elements left in messageBlockingQueue. Waiting for it to empty...",
-					messageBlockingQueue.size());
+			logger.debug("{} elements left in producerMsgQueue. Waiting for it to empty...",
+					producerMsgQueue.size());
 
 			loopTime += WAITING_LOOP_SLEEP_MS;
 			try {
@@ -595,17 +600,17 @@ public class RabbitMQProducerController {
 
 			//TODO Make this 30000 ms a configurable parameter or a final static variable
 			if (loopTime >= 30000) {
-				logger.warn("Timeout waiting for messageBlockingQueue to empty");
+				logger.warn("Timeout waiting for producerMsgQueue to empty");
 				break;
 			}
 
 		}
 
-		if (messageBlockingQueue.size() == 0) {
-			logger.debug("The messageBlockingQueue queue is empty. The producer threads will new be stopped.");
+		if (producerMsgQueue.size() == 0) {
+			logger.debug("The producerMsgQueue queue is empty. The producer threads will new be stopped.");
 		} else {
-			logger.warn("{} elements left in messageBlockingQueue. These messages will be lost!",
-					messageBlockingQueue.size());
+			logger.warn("{} elements left in producerMsgQueue. These messages will be lost!",
+					producerMsgQueue.size());
 		}
 
 	}
@@ -654,7 +659,7 @@ public class RabbitMQProducerController {
 
 		//		long loopTime = 0;
 		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-		//			while (this.getProducerState() != RabbitMQProducerStates.STOPPED) {
+		//			while (this.getProducerState() != RabbitMQProducerThreadStates.STOPPED) {
 		//				stop();	// call repeatedly, just in case
 		//				logger.debug("Waiting for RabbitMQ producer thread to quit...");
 		//				loopTime += WAITING_LOOP_SLEEP_MS;
@@ -670,7 +675,7 @@ public class RabbitMQProducerController {
 		//			}
 		//		} else {
 		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-		//				while (this.getProducerState(threadIndex) != RabbitMQProducerStates.STOPPED) {
+		//				while (this.getProducerState(threadIndex) != RabbitMQProducerThreadStates.STOPPED) {
 		//				stop();	// call repeatedly, just in case
 		//					logger.debug("Waiting for RabbitMQ producer thread {} to quit...", threadIndex);
 		//					loopTime += WAITING_LOOP_SLEEP_MS;

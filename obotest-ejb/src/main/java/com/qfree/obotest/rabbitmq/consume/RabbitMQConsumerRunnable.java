@@ -6,7 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerStates;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerThreadStates;
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
 
@@ -19,19 +19,19 @@ import com.rabbitmq.client.ShutdownSignalException;
  */
 //@Stateless
 //@LocalBean
-public class RabbitMQConsumer implements Runnable {
+public class RabbitMQConsumerRunnable implements Runnable {
 
-	private volatile RabbitMQConsumerStates state = RabbitMQConsumerStates.STOPPED;
+	private volatile RabbitMQConsumerThreadStates state = RabbitMQConsumerThreadStates.STOPPED;
 
-	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumer.class);
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerRunnable.class);
 
 	RabbitMQConsumerHelper messageConsumerHelper = null;
 
-	public RabbitMQConsumerStates getState() {
+	public RabbitMQConsumerThreadStates getState() {
 		return state;
 	}
 
-	public void setState(RabbitMQConsumerStates state) {
+	public void setState(RabbitMQConsumerThreadStates state) {
 		this.state = state;
 	}
 
@@ -40,10 +40,10 @@ public class RabbitMQConsumer implements Runnable {
 	 * even though all instances of this bean used by the application are 
 	 * created with the "new" operator and use a constructor with arguments.
 	 */
-	public RabbitMQConsumer() {
+	public RabbitMQConsumerRunnable() {
 	}
 
-	public RabbitMQConsumer(RabbitMQConsumerHelper messageConsumerHelper) {
+	public RabbitMQConsumerRunnable(RabbitMQConsumerHelper messageConsumerHelper) {
 		super();
 		this.messageConsumerHelper = messageConsumerHelper;
 	}
@@ -52,7 +52,7 @@ public class RabbitMQConsumer implements Runnable {
 	public void run() {
 
 		logger.debug("Starting RabbitMQ message consumer...");
-		this.setState(RabbitMQConsumerStates.RUNNING);
+		this.setState(RabbitMQConsumerThreadStates.RUNNING);
 
 		try {
 			messageConsumerHelper.openConnection();
@@ -139,7 +139,7 @@ public class RabbitMQConsumer implements Runnable {
 		}
 
 		logger.debug("Thread exiting");
-		this.setState(RabbitMQConsumerStates.STOPPED);
+		this.setState(RabbitMQConsumerThreadStates.STOPPED);
 
 	}
 
