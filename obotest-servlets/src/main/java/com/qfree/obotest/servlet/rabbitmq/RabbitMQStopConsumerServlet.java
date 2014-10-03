@@ -51,7 +51,7 @@ public class RabbitMQStopConsumerServlet extends HttpServlet {
 
 		//		logger.debug("Calling rabbitMQConsumerController.stop()...");
 		//		rabbitMQConsumerController.stop();
-		logger.debug("Setting RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED...");
+		logger.info("Setting RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED...");
 		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
 
 		response.setContentType("text/html;charset=UTF-8");

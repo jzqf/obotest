@@ -72,7 +72,7 @@ public class RabbitMQProducerController {
 
 	private static final int NUM_RABBITMQ_PRODUCER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_PRODUCER_MS = 2000;
-	private static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Make this smaller?
+	public static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 60;	//TODO Optimize queue size?
 	//	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
 	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	
@@ -366,7 +366,7 @@ public class RabbitMQProducerController {
 		 * the dependency set in the @DependsOn annotation above). Therefore, 
 		 * we force the consumer threads to stop here:
 		 */
-		logger.info("Waiting for the consumer threads to terminate...");
+		logger.info("Stopping the RabbitMQ consumer threads and waiting for them to terminate...");
 		stopConsumerThreadsAndWaitForTermination();
 
 		/*
@@ -378,7 +378,7 @@ public class RabbitMQProducerController {
 		 * outgoing message queue. 
 		 */
 		logger.info("Waiting for all handler threads to finish processing their incoming messages...");
-		waitForIncomingMessageHandlerThreadsToFinish();	//TODO Check if this is thread-safe or if we need "volatile"
+		waitForIncomingMessageHandlerThreadsToFinish();
 
 		/* 
 		 * Now that the consumer thread(s) are terminated and, in addition, all
@@ -394,7 +394,7 @@ public class RabbitMQProducerController {
 		 * Now that the blocking queue that is is used to hold outgoing messages
 		 * is empty, the producer thread(s) can be terminated.
 		 */
-		logger.info("Stopping the RabbitMQ producer threads...");
+		logger.info("Stopping the RabbitMQ consumer threads and waiting for them to terminate...");
 		stopProducerThreadsAndWaitForTermination();
 
 	}
@@ -407,7 +407,8 @@ public class RabbitMQProducerController {
 	public void stopConsumerThreadsAndWaitForTermination() {
 
 		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-			if (RabbitMQConsumerController.rabbitMQConsumerThread != null) {
+			if (RabbitMQConsumerController.rabbitMQConsumerThread != null
+					&& RabbitMQConsumerController.rabbitMQConsumerThread.isAlive()) {
 				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
 				logger.debug("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
@@ -418,20 +419,15 @@ public class RabbitMQProducerController {
 			}
 		} else {
 			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-				if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-					if (RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex) != null) {
-						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
-						logger.debug("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
-						try {
-							//TODO Make this 30000 ms a configurable parameter or a final static variable
-							RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
-						} catch (InterruptedException e) {
-						}
+				if (RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex) != null
+						&& RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
+					logger.debug("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
+					try {
+						//TODO Make this 30000 ms a configurable parameter or a final static variable
+						RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+					} catch (InterruptedException e) {
 					}
-				} else {
-					logger.error(
-							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-							RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
 				}
 			}
 		}
@@ -474,6 +470,7 @@ public class RabbitMQProducerController {
 		//			}
 		//		}
 
+		logger.info("Done");
 	}
 
 	//	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
@@ -540,7 +537,7 @@ public class RabbitMQProducerController {
 			//			start();	// call repeatedly, just in case
 			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
-			logger.debug("{} message handlers still processing incoming messages...",
+			logger.info("{} message handlers still processing incoming messages...",
 					acquiredMessageHandlerPermits());
 
 			loopTime += WAITING_LOOP_SLEEP_MS;
@@ -558,7 +555,7 @@ public class RabbitMQProducerController {
 		}
 
 		if (acquiredMessageHandlerPermits() == 0) {
-			logger.debug("All message handlers have finished processing their incoming messages");
+			logger.info("All message handlers have finished processing their incoming messages");
 		} else {
 			logger.warn(
 					"{} message handlers did not finished processing their incoming messages. These messages will be lost!",
@@ -589,7 +586,7 @@ public class RabbitMQProducerController {
 			//			this.start();	// call repeatedly, just in case
 			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
-			logger.debug("{} elements left in producerMsgQueue. Waiting for it to empty...",
+			logger.info("{} elements left in producerMsgQueue. Waiting for it to empty...",
 					producerMsgQueue.size());
 
 			loopTime += WAITING_LOOP_SLEEP_MS;
@@ -607,7 +604,7 @@ public class RabbitMQProducerController {
 		}
 
 		if (producerMsgQueue.size() == 0) {
-			logger.debug("The producerMsgQueue queue is empty. The producer threads will new be stopped.");
+			logger.info("The producerMsgQueue queue is empty.");
 		} else {
 			logger.warn("{} elements left in producerMsgQueue. These messages will be lost!",
 					producerMsgQueue.size());
@@ -623,9 +620,9 @@ public class RabbitMQProducerController {
 	public void stopProducerThreadsAndWaitForTermination() {
 
 		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-			if (rabbitMQProducerThread != null) {
+			if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
 				RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
-				logger.debug("Waiting for RabbitMQ producer thread to terminate...");
+				logger.info("Waiting for RabbitMQ producer thread to terminate...");
 				try {
 					//TODO Make this 30000 ms a configurable parameter or a final static variable
 					rabbitMQProducerThread.join(30000);	// Wait maximum 30 seconds
@@ -633,23 +630,16 @@ public class RabbitMQProducerController {
 				}
 			}
 		} else {
-			// TODO This is slightly more efficient and a little clearer.
-			//			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
-			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-				if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-					if (rabbitMQProducerThreads.get(threadIndex) != null) {
-						RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
-						logger.debug("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
-						try {
-							//TODO Make this 30000 ms a configurable parameter or a final static variable
-							rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
-						} catch (InterruptedException e) {
-						}
+			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_PRODUCER_THREADS; threadIndex++) {
+				if (rabbitMQProducerThreads.get(threadIndex) != null
+						&& rabbitMQProducerThreads.get(threadIndex).isAlive()) {
+					RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
+					logger.info("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
+					try {
+						//TODO Make this 30000 ms a configurable parameter or a final static variable
+						rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+					} catch (InterruptedException e) {
 					}
-				} else {
-					logger.error(
-							"{} RabbitMQ producer threads are not supported.\nMaximum number of threads supported is 2",
-							NUM_RABBITMQ_PRODUCER_THREADS);
 				}
 			}
 		}
@@ -692,6 +682,7 @@ public class RabbitMQProducerController {
 		//			}
 		//		}
 
+		logger.info("Done");
 	}
 
 	/**
@@ -704,7 +695,7 @@ public class RabbitMQProducerController {
 	 * @return the number of message handler permits currently acquired
 	 */
 	@Lock(LockType.READ)
-	public int acquiredMessageHandlerPermits() {
+	private int acquiredMessageHandlerPermits() {
 		return RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits();
 	}

@@ -53,6 +53,7 @@ public class RabbitMQStopServlet extends HttpServlet {
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
+		logger.info("Executing rabbitMQProducerController.shutdown()...");
 		rabbitMQProducerController.shutdown();
 
 		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",

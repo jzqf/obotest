@@ -3,6 +3,7 @@ package com.qfree.obotest.rabbitmq.produce.passagetest1;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.PreDestroy;
 import javax.enterprise.event.Event;
 import javax.inject.Inject;
 
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerHelper;
 import com.rabbitmq.client.Channel;
@@ -22,12 +24,12 @@ import com.rabbitmq.client.MessageProperties;
 //TODO This must be eliminated or updated to something related to producing:
 
 /*
- * This class is used as a base class for helper singleton EJBs
- * (one for each producer thread). By using a base class, it is easy to ensure 
- * that all such classes have identical methods. Separate singleton  classes are
- * needed because one singleton object can be instantiated from a singleton EJB'
- * class, and we want a different singleton object per producer thread (to 
- * eliminate resource contention).
+ * This class is used as a base class for helper singleton EJBs (one for each 
+ * producer thread). By using a base class, it is easy to ensure that all such 
+ * classes have identical methods. Separate singleton classes are needed because
+ * only one singleton object can be instantiated from a singleton EJB class, and
+ * we want a different singleton object for each producer thread (to eliminate 
+ * resource contention).
  * 
  * One slight drawback of using a common base class is that all logging is
  * associated with this base class, not the particular EJB singleton class that
@@ -57,18 +59,14 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	 * constructor for this class, but it will be set to the name of the 
 	 * subclass if an instance of a subclass is constructed.
 	 */
-	String subClassName = null;
+	private String subClassName = null;
 
-	Connection connection = null;
-	Channel channel = null;
-	//TODO This must be eliminated or updated to something related to producing:
-	//	QueueingConsumer consumer = null;
-
-	//	BlockingQueue<byte[]> producerMsgQueue = null;
+	private Connection connection = null;
+	private Channel channel = null;
 
     @Inject
 	@PassageQualifier
-	Event<PassageTest1Event> passageEvent;
+	public Event<PassageTest1Event> passageEvent;
 
 	public RabbitMQProducerHelperPassageTest1() {
 		/*
@@ -129,6 +127,11 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	@Override
 	public void handlePublish() throws InterruptedException, IOException {
 
+		logger.info("q={}, throttled={} - Before poll",
+				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+				new Boolean(RabbitMQConsumerRunnable.throttled)
+				);
+
 		logger.trace("[{}]: producerMsgQueue.size() = {}", subClassName,
 				RabbitMQProducerController.producerMsgQueue.size());
 		logger.trace("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}", subClassName,
@@ -136,12 +139,18 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 
 		byte[] passageBytes = RabbitMQProducerController.producerMsgQueue.poll(RABBITMQ_PRODUCER_TIMEOUT_MS,
 				TimeUnit.MILLISECONDS);
-			if (passageBytes!=null) {
+		if (passageBytes != null) {
 
-				logger.debug("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
-						passageBytes.length);
-				channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
-				logger.debug("[{}]: Published RabbitMQ passage message", subClassName);
+			logger.info("q={}, throttled={} - After poll: {} bytes",
+					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+					new Boolean(RabbitMQConsumerRunnable.throttled),
+					passageBytes.length
+					);
+
+			logger.debug("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
+					passageBytes.length);
+			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
+			logger.debug("[{}]: Published RabbitMQ passage message", subClassName);
 
 			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.size() = {}", subClassName,
 					RabbitMQProducerController.producerMsgQueue.size());
@@ -153,6 +162,12 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				//				Thread.sleep(2000);
 
 			} else {
+
+			logger.info("q={}, throttled={} - After poll: No message.",
+					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+					new Boolean(RabbitMQConsumerRunnable.throttled)
+					);
+
 				/*
 				 * This just means that there were no messages in the queue to
 				 * publish after waiting the timeout period. This in perfectly 
@@ -166,9 +181,9 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			}
 	}
 
-	//	@PreDestroy
-	//	public void terminate() {
-	//		logger.info("[{}]: @PreDestroy: What should/can I do here?...", subClassName);
-	//	}
+	@PreDestroy
+	public void terminate() {
+		logger.info("[{}]: This bean will now be destroyed by the container...", subClassName);
+	}
 
 }

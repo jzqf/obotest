@@ -1,7 +1,6 @@
 package com.qfree.obotest.eventlistener;
 
 import java.io.Serializable;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
@@ -17,23 +16,30 @@ import com.google.protobuf.ByteString;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
 @Stateless
 @LocalBean
-public class ConsumerMsgHandlerPassageTest implements Serializable {
+public class ConsumerMsgHandlerPassageTest1 implements Serializable {
+
+	private static final Logger logger = LoggerFactory.getLogger(ConsumerMsgHandlerPassageTest1.class);
 
 	private static final long serialVersionUID = 1L;
-	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
+	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 1000;
 
-	private static final Logger logger = LoggerFactory.getLogger(ConsumerMsgHandlerPassageTest.class);
-
-	public ConsumerMsgHandlerPassageTest() {
-		logger.debug("{} instance created", ConsumerMsgHandlerPassageTest.class.getSimpleName());
+	public ConsumerMsgHandlerPassageTest1() {
+		logger.debug("{} instance created", ConsumerMsgHandlerPassageTest1.class.getSimpleName());
 	}
 
 	@Asynchronous
 	public void processPassage(@Observes @PassageQualifier PassageTest1Event event) {
+
+		logger.info("permits={}, q={}, throttled={}",
+				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
+				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+				new Boolean(RabbitMQConsumerRunnable.throttled)
+				);
 
 		/*
 		 * Attempt to acquire a permit to process this message. This mechanism
@@ -42,20 +48,24 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 		 * during shutdown that all messages have been processed in the before 
 		 * waiting for the producer queue to empty.
 		 */
+		logger.info("Before acquiring permit. Available permits = {}",
+				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 		if (RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire()) {
+			logger.info("After acquiring permit. Available permits = {}",
+					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 
 			try {
 				logger.debug("Start processing passage: {}...", event.toString());
-				//		try {
-				//			logger.debug("Sleeping for 1000 ms to simulate doing some work...");
-				//			Thread.sleep(1000);		// simulate doing some work
-				//		} catch (InterruptedException e) {
-				//		}
+				try {
+					logger.info("Sleeping for 1000 ms to simulate doing some work...");
+					Thread.sleep(1000);		// simulate doing some work
+				} catch (InterruptedException e) {
+				}
 				logger.debug("Finished processing passage: {}...", event.toString());
 
 				/*
-				 * Send the result of the processing as a RabbitMQ message to a RabbitMQ
-				 * broker.
+				 * Send the result of the processing as a RabbitMQ message to a 
+				 * RabbitMQ broker.
 				 * 
 				 * First, create a RabbitMQ message payload.
 				 */
@@ -65,9 +75,9 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 				byte[] passageBytes = passage.build().toByteArray();
 
 				/*
-				 * Queue the message for publishing to a RabbitMQ broker. The actual
-				 * publishing will be performed in a RabbitMQ producer background
-				 * thread.
+				 * Queue the message for publishing to a RabbitMQ broker. The 
+				 * actual publishing will be performed in a RabbitMQ producer 
+				 * background thread.
 				 */
 				logger.debug("Queuing message for delivery [{} bytes]", passageBytes.length);
 				/*
@@ -76,6 +86,7 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 				 * TODO Should we try to follow up that the message *was* delivered successfully?
 				 * If so, what should be done in that case?
 				 */
+				//				boolean success = false;
 				boolean success = this.send(passageBytes);
 				if (success) {
 					logger.debug("Message successfully queued.");
@@ -85,7 +96,7 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 
 			} finally {
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
-				logger.debug("Message handler permit released. Number of free permits = {}",
+				logger.info("Message handler permit released. Number of free permits = {}",
 						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 			}
 
@@ -97,10 +108,16 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 
 	public boolean send(byte[] bytes) {
 
-		BlockingQueue<byte[]> producerMsgQueue = RabbitMQProducerController.producerMsgQueue;
+		logger.info("permits={}, q={}, throttled={}, q-local{}",
+				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
+				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+				new Boolean(RabbitMQConsumerRunnable.throttled)
+				);
 
-		logger.debug("producerMsgQueue.size() = {}", producerMsgQueue.size());
-		logger.debug("producerMsgQueue.remainingCapacity() = {}", producerMsgQueue.remainingCapacity());
+		logger.debug("RabbitMQProducerController.producerMsgQueue.size() = {}",
+				RabbitMQProducerController.producerMsgQueue.size());
+		logger.debug("RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
+				RabbitMQProducerController.producerMsgQueue.remainingCapacity());
 
 		/*    
 		 * If the queue is not full this will enter the message into the queue 
@@ -110,17 +127,25 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 		 * placed in the queue and "true" is returned; otherwise, "false" is 
 		 * returned and the sender must deal with the failure.
 		 * 
-		 * TODO Should we deal with the failure here in send()? Look into this!
+		 * TODO Staying in this loop forever is not good. Implement a better algorithm.
 		 */
 		logger.debug("Offering a message to the producer blocking queue [{} bytes]...", bytes.length);
 		boolean success = false;
 		while (!success) {
 			try {
-				//TODO This will block forever while the queue is full. Is this OK?
-				//			success = producerMsgQueue.offer(bytes);
-				success = producerMsgQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+				//TODO How long should we block here? We need to think through this behaviour carefully.
+				//			success = RabbitMQProducerController.producerMsgQueue.offer(bytes);
+				success = RabbitMQProducerController.producerMsgQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS,
+						TimeUnit.MILLISECONDS);
 
-				//TODO !!!!!!!!!! AT LEAST TEST: "PUBLISHER CONFIRMS" !!!!!!!!!
+				logger.info("permits={}, q={}, throttled={}, success={}",
+						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
+						RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+						new Boolean(RabbitMQConsumerRunnable.throttled),
+						new Boolean(success)
+						);
+
+				//TODO "PUBLISHER CONFIRMS" !!!!!!!!!
 
 			} catch (InterruptedException e) {
 				//TODO Can we ensure that the message to be queued, i.e., "bytes", is not lost?
@@ -141,6 +166,10 @@ public class ConsumerMsgHandlerPassageTest implements Serializable {
 				 * waiting to publish the message. 
 				 */
 				logger.warn("\n**********\nMessage not entered into producer blocking queue!\n**********");
+
+				logger.info("RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
+						RabbitMQProducerController.producerMsgQueue.remainingCapacity());
+				logger.info("RabbitMQConsumerRunnable.throttled = {}", RabbitMQConsumerRunnable.throttled);
 			}
 		}
 		return success;

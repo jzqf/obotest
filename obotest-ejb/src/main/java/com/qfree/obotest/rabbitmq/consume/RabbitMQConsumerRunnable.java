@@ -5,8 +5,10 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerThreadStates;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
 
@@ -21,9 +23,21 @@ import com.rabbitmq.client.ShutdownSignalException;
 //@LocalBean
 public class RabbitMQConsumerRunnable implements Runnable {
 
-	private volatile RabbitMQConsumerThreadStates state = RabbitMQConsumerThreadStates.STOPPED;
-
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerRunnable.class);
+
+	private static final int QUEUE_REMAINING_CAPACITY_LOW_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH / 3;
+	private static final int QUEUE_REMAINING_CAPACITY_HIGH_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH * 2 / 3;
+	private static final long WAITING_LOOP_SLEEP_MS = 1000;
+
+	private static volatile RabbitMQConsumerThreadStates state = RabbitMQConsumerThreadStates.STOPPED;
+
+
+	/**
+	 * When true, message consumption will be disabled until the number of 
+	 * free elements available in the producerMsgQueue queue rises above 
+	 * QUEUE_REMAINING_CAPACITY_HIGH_WATER.
+	 */
+	public static volatile boolean throttled = false;
 
 	RabbitMQConsumerHelper messageConsumerHelper = null;
 
@@ -51,7 +65,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	@Override
 	public void run() {
 
-		logger.debug("Starting RabbitMQ message consumer...");
+		logger.info("Starting RabbitMQ message consumer...");
 		this.setState(RabbitMQConsumerThreadStates.RUNNING);
 
 		try {
@@ -61,34 +75,77 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				try {
 
 					messageConsumerHelper.configureConsumer();
-					logger.debug("Waiting for image(s).");
+					logger.info("Waiting for image(s).");
 
 					while (true) {
-						try {
-							messageConsumerHelper.handleDeliveries();
-						} catch (InterruptedException e) {
+
+						// Update "throttled", if necessary:
+						int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
+						logger.info("remainingCapacity = {}, throttled={}", remainingCapacity, new Boolean(throttled));
+						if (throttled) {
+							if (remainingCapacity > QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
+								logger.info("Message consumption throttling is now *off*");
+								throttled = false;
+							}
+						} else {
+							if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
+								logger.info("Message consumption throttling is now *on*");
+								throttled = true;
+							}
+						}
+
+						logger.info("permits={}, q={}, throttled={}",
+								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
+								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+								new Boolean(throttled)
+								);
+
+						if (!throttled) {
+
+							try {
+								messageConsumerHelper.handleDeliveries();
+							} catch (InterruptedException e) {
+								/*
+								 * Code elsewhere could be requesting that this
+								 * thread be terminated. This is checked for below.
+								 */
+								logger.info("InterruptedException received.");
+							} catch (InvalidProtocolBufferException e) {
+								logger.info(
+										"InvalidProtocolBufferException received. The RabbitMQ connection will close.",
+										e);
+								break;
+							} catch (IOException e) {
+								logger.error("IOException received. The RabbitMQ connection will close.", e);
+								break;
+							} catch (ShutdownSignalException e) {
+								logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
+								break;
+							} catch (ConsumerCancelledException e) {
+								logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.",
+										e);
+								break;
+							} catch (Throwable e) {
+								// We log the exception, but do not terminate this thread.
+								logger.error("Unexpected exception caught.", e);
+							}
+
+						} else {
 							/*
-							 * RabbitMQConsumerController is probably requesting that this
-							 * thread be shut down. This is checked below.
+							 * Wait a short while to allow the message producer thread(s) to publish
+							 * messages currently held in the RabbitMQProducerController.producerMsgQueue
+							 * queue, and then run through the loop again.
 							 */
-							logger.info("InterruptedException received.");
-						} catch (ShutdownSignalException e) {
-							logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
-							break;
-						} catch (ConsumerCancelledException e) {
-							logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.", e);
-							break;
-						} catch (IOException e) {
-							logger.error("IOException received. The RabbitMQ connection will close.", e);
-							break;
-						} catch (Throwable e) {
-							// We log the exception, but do not terminate this thread.
-							logger.error("Unexpected exception caught.", e);
+							logger.info("Throttled. Sleeping for 1s.");
+							try {
+								Thread.sleep(WAITING_LOOP_SLEEP_MS);
+							} catch (InterruptedException e) {
+							}
 						}
 
 						logger.trace("Checking if shutdown was requested...");
 						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
-							logger.info("Shutdown request detected. This thread will terminate.");
+							logger.info("Request to stop detected. This thread will terminate.");
 							break;
 						}
 					}
@@ -109,7 +166,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			}
 
 		} catch (IOException e) {
-			//TODO Write out more details about the connection attempt
+			//TODO Log more details about the connection attempt here
 			// What I write out and how will depend on how I specify the host details.
 			// For example, I can specify the host, port, username, etc., separately, or
 			// I can use a single AMQP URI.
@@ -142,5 +199,4 @@ public class RabbitMQConsumerRunnable implements Runnable {
 		this.setState(RabbitMQConsumerThreadStates.STOPPED);
 
 	}
-
 }

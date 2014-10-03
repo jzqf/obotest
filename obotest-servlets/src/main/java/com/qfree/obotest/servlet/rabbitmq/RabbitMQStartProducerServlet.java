@@ -51,7 +51,7 @@ public class RabbitMQStartProducerServlet extends HttpServlet {
 
 		//		logger.debug("Calling rabbitMQProducerController.start()...");
 		//		rabbitMQProducerController.start();
-		logger.debug("Setting RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING...");
+		logger.info("Setting RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING...");
 		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
 		response.setContentType("text/html;charset=UTF-8");

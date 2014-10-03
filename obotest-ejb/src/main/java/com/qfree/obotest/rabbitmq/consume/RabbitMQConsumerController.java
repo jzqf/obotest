@@ -120,18 +120,16 @@ public class RabbitMQConsumerController {
 	 */
 	public static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
 
-	// NUM_RABBITMQ_CONSUMER_THREADS == 1:
+	// This is for NUM_RABBITMQ_CONSUMER_THREADS == 1:
 	/*
 	 * These are declared "volatile" because they are read in the method 
 	 * getConsumerState(),and this method can be called from other threads, 
 	 * such as from the RabbitMQProducerController singleton bean thread, as
 	 * well as from the servlet that stops the consumer threads.
 	 */
-	//	private volatile RabbitMQConsumerRunnable rabbitMQConsumer = null;
-	//	private volatile Thread rabbitMQConsumerThread = null;
 	public static volatile RabbitMQConsumerRunnable rabbitMQConsumerRunnable = null;
 	public static volatile Thread rabbitMQConsumerThread = null;
-	// NUM_RABBITMQ_CONSUMER_THREADS > 1:
+	// This is for NUM_RABBITMQ_CONSUMER_THREADS > 1:
 	/*
 	 * These are parallel lists (arrays could also be used). There will be one 
 	 * element in each list for each RabbitMQ consumer thread to be started from
@@ -142,9 +140,6 @@ public class RabbitMQConsumerController {
 	 * other threads, such as from the RabbitMQProducerController singleton bean
 	 * thread, as well as from the servlet that stops the consumer threads.
 	 */
-	//	private volatile List<RabbitMQConsumerRunnable> rabbitMQConsumers = null;
-	//	private volatile List<RabbitMQConsumerHelper> rabbitMQConsumerThreadImageEventSenders = null;
-	//	private volatile List<Thread> rabbitMQConsumerThreads = null;
 	public static final List<RabbitMQConsumerRunnable> rabbitMQConsumerRunnables =
 			Collections.synchronizedList(new ArrayList<RabbitMQConsumerRunnable>());
 	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadHelpers =
@@ -167,9 +162,9 @@ public class RabbitMQConsumerController {
 	 * its own singleton helper EJB. This will reduce contention over sharing 
 	 * the *same* singleton between both/all threads.
 	 * 
-	 * Testing seems to indicate that qualifiers, e.g., @HelperBean1 & 
-	 * @HelperBean2 don't work when EJBs are injected with @EJB, but they *do*
-	 * work with injection via @Inject.
+	 * The qualifiers, e.g., @HelperBean1 & @HelperBean2 don't work when EJBs 
+	 * are injected with @EJB, but they *do* work with injection via @Inject.
+	 * This must be because the CDI framework is used.
 	 */
 	//	@EJB
 	@Inject
@@ -180,48 +175,6 @@ public class RabbitMQConsumerController {
 	@Inject
 	@HelperBean2
 	RabbitMQConsumerHelper messageConsumerHelperBean2;	// used by the second thread
-
-
-	//	@Lock(LockType.WRITE)
-	//	public boolean acquireMessageHandlerPermit() {
-	//		/*
-	//		 * Since the total number of permits is set to a large number, this 
-	//		 * should, ideally, always succeed (since there is a reasonable upper 
-	//		 * limit to how many threads the container will devote for receiving
-	//		 * the CDI events. Assuming that the semaphore has 
-	//		 * been constructed with a reasonably large number of maximum permits,
-	//		 * if a permit is *not* acquired here, then the solution to this problem
-	//		 * will probably *not* be to wait or increase the maximum number of 
-	//		 * permits, but to look for a bug in the algorithm.
-	//		 */
-	//		boolean acquired = RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire();
-	//		logger.debug("Message handler permit acquired. Number of active message handlers = {}",
-	//				acquiredMessageHandlerPermits());
-	//		return acquired;
-	//	}
-
-	//	@Lock(LockType.WRITE)
-	//	public boolean releaseMessageHandlerPermit() {
-	//		RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
-	//		logger.debug("Message handler permit released. Number of active message handlers = {}",
-	//				acquiredMessageHandlerPermits());
-	//		return true;
-	//	}
-
-	//	/**
-	//	 * Returns the number of message handler permits currently acquired. This
-	//	 * represents the number of message handlers threads that are currently
-	//	 * processing messages consumed from a RabbitMQ broker. The threads are 
-	//	 * started automatically by the Java EE application container as the target
-	//	 * of CDI events that are fired by RabbitMQ message consumer threads.
-	//	 * 
-	//	 * @return the number of message handler permits currently acquired
-	//	 */
-	//	@Lock(LockType.READ)
-	//	public int acquiredMessageHandlerPermits() {
-	//		return RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
-	//				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits();
-	//	}
 
 	/*
 	 * @Startup ensures that this method is called when the application starts 
@@ -251,22 +204,6 @@ public class RabbitMQConsumerController {
 		Timer timer =
 				timerService.createSingleActionTimer(DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS, new TimerConfig());
 
-		//		if (messageConsumerHelperBean1 == null) {
-		//			logger.debug("messageConsumerHelperBean1 is null!");
-		//		} else {
-		//			logger.debug("messageConsumerHelperBean1 is not null");
-		//		}
-		//		if (messageConsumerHelperBean2 == null) {
-		//			logger.debug("messageConsumerHelperBean2 is null!");
-		//		} else {
-		//			logger.debug("messageConsumerHelperBean2 is not null");
-		//		}
-		//		if (messageConsumerHelperBean1 == messageConsumerHelperBean2) {
-		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are the same beans");
-		//		} else {
-		//			logger.debug("messageConsumerHelperBean1 and messageConsumerHelperBean2 are different beans");
-		//		}
-
 		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 			/*
 			 *  There is nothing to do here if we will start only a single 
@@ -283,11 +220,6 @@ public class RabbitMQConsumerController {
 			}
 
 			if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-				// Initialize list rabbitMQConsumerThreadImageEventSenders with a 
-				// different singleton session bean in each element.  These beans
-				// will fire the CDI events from the RabbitMQ consumer threads that
-				// are managed by the current singleton session bean
-				//				rabbitMQConsumerThreadImageEventSenders = new ArrayList<>();
 				rabbitMQConsumerThreadHelpers.add(messageConsumerHelperBean1);
 				if (NUM_RABBITMQ_CONSUMER_THREADS > 1) {
 					rabbitMQConsumerThreadHelpers.add(messageConsumerHelperBean2);
@@ -386,7 +318,7 @@ public class RabbitMQConsumerController {
 		 * Stop the RabbitMQ consumer thread(s) and then wait for them to 
 		 * terminate.
 		 */
-		logger.info("Stopping the RabbitMQ consumer threads...");
+		logger.info("Stopping the RabbitMQ consumer threads and waiting for them to terminate...");
 		stopConsumerThreadsAndWaitForTermination();
 
 		logger.info("RabbitMQ consumer controller will now be destroyed by the container");
@@ -400,9 +332,9 @@ public class RabbitMQConsumerController {
 	private void stopConsumerThreadsAndWaitForTermination() {
 
 		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-			if (rabbitMQConsumerThread != null) {
+			if (rabbitMQConsumerThread != null && rabbitMQConsumerThread.isAlive()) {
 				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
-				logger.debug("Waiting for RabbitMQ consumer thread to terminate...");
+				logger.info("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
 					//TODO Make this 30000 ms a configurable parameter or a final static variable
 					rabbitMQConsumerThread.join(30000);	// Wait maximum 30 seconds
@@ -411,23 +343,19 @@ public class RabbitMQConsumerController {
 			}
 		} else {
 			for (int threadIndex = 0; threadIndex < NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-				if (NUM_RABBITMQ_CONSUMER_THREADS <= 2) {
-					if (rabbitMQConsumerThreads.get(threadIndex) != null) {
-						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
-						logger.debug("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
-						try {
-							//TODO Make this 30000 ms a configurable parameter or a final static variable
-							rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
-						} catch (InterruptedException e) {
-						}
+				if (rabbitMQConsumerThreads.get(threadIndex) != null
+						&& rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
+					logger.info("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
+					try {
+						//TODO Make this 30000 ms a configurable parameter or a final static variable
+						rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+					} catch (InterruptedException e) {
 					}
-				} else {
-					logger.error(
-							"{} RabbitMQ consumer threads are not supported.\nMaximum number of threads supported is 2",
-							NUM_RABBITMQ_CONSUMER_THREADS);
 				}
 			}
 		}
 
+		logger.info("Done");
 	}
 }

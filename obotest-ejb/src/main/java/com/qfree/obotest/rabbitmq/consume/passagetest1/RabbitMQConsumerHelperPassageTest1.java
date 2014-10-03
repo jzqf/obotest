@@ -2,6 +2,7 @@ package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
 
+import javax.annotation.PreDestroy;
 import javax.ejb.Lock;
 import javax.ejb.LockType;
 import javax.enterprise.event.Event;
@@ -14,7 +15,10 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -22,12 +26,12 @@ import com.rabbitmq.client.QueueingConsumer;
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
 
 /*
- * This class is used as a base class for helper singleton EJBs
- * (one for each consumer thread). By using a base class, it is easy to ensure 
- * that all such classes have identical methods. Separate singleton  classes are
- * needed because one singleton object can be instantiated from a singleton EJB'
- * class, and we want a different singleton object per consumer thread (to 
- * eliminate resource contention).
+ * This class is used as a base class for helper singleton EJBs (one for each 
+ * consumer thread). By using a base class, it is easy to ensure that all such 
+ * classes have identical methods. Separate singleton classes are needed because
+ * only one singleton object can be instantiated from a singleton EJB class, and
+ * we want a different singleton object for each consumer thread (to eliminate 
+ * resource contention).
  * 
  * One slight drawback of using a common base class is that all logging is
  * associated with this base class, not the particular EJB singleton class that
@@ -57,11 +61,11 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * constructor for this class, but it will be set to the name of the 
 	 * subclass if an instance of a subclass is constructed.
 	 */
-	String subClassName = null;
+	private String subClassName = null;
 
-	Connection connection = null;
-	Channel channel = null;
-	QueueingConsumer consumer = null;
+	private Connection connection = null;
+	private Channel channel = null;
+	private QueueingConsumer consumer = null;
 
     @Inject
 	@PassageQualifier
@@ -122,16 +126,23 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
+			logger.info("permits={}, q={}, throttled={}",
+					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
+					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+					new Boolean(RabbitMQConsumerRunnable.throttled)
+					);
+
 			byte[] passageBytes = delivery.getBody();
 
 			logger.debug("[{}]: Received passage: {} bytes", subClassName, passageBytes.length);
 
-
 			if (false) {
 
 				/*
-				 * Process the message here in this method.
-				 * TODO Update this to publish a message or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
+				 * Process the message synchronously, here in this thread.
+				 * 
+				 * TODO Update this to publish an outgoing message
+				 * or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
@@ -141,61 +152,13 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			} else {
 
 				/*
-				 * Process the message in another thread that receives a CDI 
-				 * event that is sent from this thread.
+				 * Process the message asynchronously in another thread that 
+				 * receives a CDI event that is sent from this thread.
 				 */
 
 				/*
 				 * TODO CAN WE HANDLE THE CASE WHERE THE OBSERVER THREAD CANNOT PROCESS THE MESSAGE FOR SOME REASON?
-				 * 
-				 * How about having the "Observer" thread that receives the event fired
-				 * from this thread fire an event back to this thread to tell it to 
-				 * acknowledge the event? The acknowledgement event cannot be sent to the 
-				 * main thread class because that class is not managed by the container. Therefore,
-				 * it would be necessary to fire the acknowledgement event back to the
-				 * singleton helper bean to perform the acknowledgement.
-				 * In order to implement this, it would be necessary to (at least):
-				 * 
-				 * 		1.	Send the "delivery tag" along with
-				 * 			rest of the event payload to the "Observer" method from this 
-				 * 			thread and then later fire this "delivery tag" back to 
-				 * 			the singleton helper bean via the acknowledgement event
-				 * 			sent from the "Observer" method that processes the RabbitMQ
-				 * 			message payload.  Is this possible?
-				 * 		
-				 * This will mean that we cannot just forward the raw message bytes to the
-				 * "Observer" method from this thread, because we need to also send the
-				 * "delivery tag"
-				 * 
-				 * This will be more complicate if we use several RabbitMQ consumer threads,
-				 * because it will also be necessary to ensure that the acknowledgement event 
-				 * is fired back to the appropriate thread that has the reference to the correct 
-				 * channel on which the acknowledgement must be sent.
-				 * 
-				 * ANOTHER IDEA TO SOLVE THIS PROBLEM:
-				 * 
-				 * 1. Send the "delivery tag" along with rest of the event 
-				 *    payload to the "Observer" method (similar to above)
-				 * 
-				 * 2. After the "Observer" thread that receives the event that
-				 *    is fired to it, it places the delivery tag into one of two
-				 *    blocking queues: 
-				 *        a. One queue for successfully processed messages
-				 *        b. One queue for messages *not* successfully processed.
-				 *    It will be the responsibility of another thread to process
-				 *    the entries in these queues to acknowledge the messages
-				 *    that were successfully processed (this means that the 
-				 *    number of unacknowledged messages might build up 
-				 *    somewhat), and to do whatever it can with the message
-				 *    delivery tags for messages that were *not* processed
-				 *    successfully. 
-				 * 
-				 * It is probably best to just wait and deal with this functionality at
-				 * a later time, since it may never be needed.
-				 */
-
-				/*
-				 * TODO If there is something wrong with the RabbitMQ message payload, 
+				 * TODO If there is something wrong with the RabbitMQ message payload...
 				 * we might want to sent it to a special RabbitMQ exchange that collects
 				 * bad messages, instead of processing it here through the normal workflow?
 				 */
@@ -244,7 +207,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method????!!!
 	 * 
 	 */
-	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. I SHOULD PROBABLY REMOVE IT HERE AND IN THE OTHER CLASS
+	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. TEST WITH AND WIHTOUT THIS @Asynchronous
 	//	@Asynchronous
 	@Lock(LockType.WRITE)
 	private void firePassageEvent(byte[] passageBytes) {
@@ -271,9 +234,9 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 	}
 
-	//	@PreDestroy
-	//	public void terminate() {
-	//		logger.info("[{}]: @PreDestroy: What should/can I do here?...", subClassName);
-	//	}
+	@PreDestroy
+	public void terminate() {
+		logger.info("[{}]: This bean will now be destroyed by the container...", subClassName);
+	}
 
 }

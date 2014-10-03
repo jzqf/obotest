@@ -54,12 +54,12 @@ public class RabbitMQStartServlet extends HttpServlet {
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
-		logger.debug("Calling rabbitMQProducerController.start()...");
+		logger.info("Calling rabbitMQProducerController.start()...");
 		rabbitMQProducerController.start();
 		//		logger.debug("Setting RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING...");
 		//		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
-		logger.debug("Calling rabbitMQConsumerController.start()...");
+		logger.info("Calling rabbitMQConsumerController.start()...");
 		rabbitMQConsumerController.start();
 		//		logger.debug("Setting RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING...");
 		//		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;

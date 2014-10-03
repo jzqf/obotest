@@ -5,6 +5,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerThreadStates;
 //TODO This must be eliminated or updated to something related to producing:
@@ -65,12 +66,18 @@ public class RabbitMQProducerRunnable implements Runnable {
 					//					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
 
 					while (true) {
+
+						logger.info("q={}, throttled={}",
+								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+								new Boolean(RabbitMQConsumerRunnable.throttled)
+								);
+
 						try {
 							messageProducerHelper.handlePublish();
 						} catch (InterruptedException e) {
 							/*
-							 * RabbitMQProducerController is probably requesting that this
-							 * thread be shut down. This is checked below.
+							 * Code elsewhere could be requesting that this
+							 * thread be terminated. This is checked for below.
 							 */
 							logger.info("InterruptedException received.");
 						} catch (ShutdownSignalException e) {
@@ -90,7 +97,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 
 						logger.trace("Checking if shutdown was requested...");
 						if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
-							logger.info("Shutdown request detected. This thread will terminate.");
+							logger.info("Request to stop detected. This thread will terminate.");
 							break;
 						}
 					}
