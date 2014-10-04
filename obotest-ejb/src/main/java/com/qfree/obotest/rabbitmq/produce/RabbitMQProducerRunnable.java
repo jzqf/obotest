@@ -5,6 +5,8 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
 //TODO This must be eliminated or updated to something related to producing:
 import com.rabbitmq.client.ConsumerCancelledException;
@@ -54,9 +56,18 @@ public class RabbitMQProducerRunnable implements Runnable {
 
 					while (true) {
 
-						logger.debug(
-								"q={}. Calling messageProducerHelper.handlePublish()... (should reduce the queue)",
-								RabbitMQProducerController.producerMsgQueue.remainingCapacity());
+						logger.info(
+								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
+								RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS -
+										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+												.availablePermits(),
+								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
+								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
+								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
+								new Boolean(RabbitMQConsumerRunnable.throttled)
+								);
 
 						try {
 							messageProducerHelper.handlePublish();

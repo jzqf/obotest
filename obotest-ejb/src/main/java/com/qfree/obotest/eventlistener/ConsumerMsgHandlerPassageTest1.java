@@ -66,8 +66,8 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 			try {
 				logger.debug("Start processing passage: {}...", event.toString());
 				//				try {
-				//					logger.debug("Sleeping for 100 ms to simulate doing some work...");
-				//					Thread.sleep(100);		// simulate doing some work
+				//					logger.debug("Sleeping for 500 ms to simulate doing some work...");
+				//					Thread.sleep(500);		// simulate doing some work
 				//				} catch (InterruptedException e) {
 				//				}
 				logger.debug("Finished processing passage: {}...", event.toString());

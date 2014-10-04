@@ -84,8 +84,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 						// Update "throttled_ProducerMsgQueue", if necessary:
 						int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
-						//						logger.info("QRemainingCapacity = {}, throttled_ProducerMsgQueue={}", remainingCapacity,
-						//								new Boolean(throttled_ProducerMsgQueue));
 						if (throttled_ProducerMsgQueue) {
 							if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
 								logger.info("Consumption throttling based on producer queue size is now *off*");
@@ -99,18 +97,15 @@ public class RabbitMQConsumerRunnable implements Runnable {
 						}
 
 						// Update "throttled_UnacknowledgedCDIEvents", if necessary:
-						int NumUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+						int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
 								- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
-						//						logger.info("NumUnacknowledgeCDIEvents = {}, throttled_UnacknowledgedCDIEvents={}",
-						//								NumUnacknowledgeCDIEvents,
-						//								new Boolean(throttled_UnacknowledgedCDIEvents));
 						if (throttled_UnacknowledgedCDIEvents) {
-							if (NumUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
+							if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
 								logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
 								throttled_UnacknowledgedCDIEvents = false;
 							}
 						} else {
-							if (NumUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
+							if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
 								logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
 								throttled_UnacknowledgedCDIEvents = true;
 							}
@@ -118,11 +113,12 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 						throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
 
-						logger.info(
-								"Unack={}, Hndlr={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
-								RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
+						logger.debug(
+								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
+								numUnacknowledgeCDIEvents,
+								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+								remainingCapacity,
 								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
 								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
 								new Boolean(RabbitMQConsumerRunnable.throttled)
