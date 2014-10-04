@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerHelper;
 import com.rabbitmq.client.Channel;
@@ -127,9 +126,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	@Override
 	public void handlePublish() throws InterruptedException, IOException {
 
-		logger.info("q={}, throttled={} - Before poll",
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-				new Boolean(RabbitMQConsumerRunnable.throttled)
+		logger.debug("q={} - Before poll",
+				RabbitMQProducerController.producerMsgQueue.remainingCapacity()
 				);
 
 		logger.trace("[{}]: producerMsgQueue.size() = {}", subClassName,
@@ -141,9 +139,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				TimeUnit.MILLISECONDS);
 		if (passageBytes != null) {
 
-			logger.info("q={}, throttled={} - After poll: {} bytes",
+			logger.debug("q={} - After poll: Element removed: {} bytes",
 					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-					new Boolean(RabbitMQConsumerRunnable.throttled),
 					passageBytes.length
 					);
 
@@ -163,9 +160,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 
 			} else {
 
-			logger.info("q={}, throttled={} - After poll: No message.",
-					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-					new Boolean(RabbitMQConsumerRunnable.throttled)
+			logger.debug("q={} - After poll: No message.",
+					RabbitMQProducerController.producerMsgQueue.remainingCapacity()
 					);
 
 				/*

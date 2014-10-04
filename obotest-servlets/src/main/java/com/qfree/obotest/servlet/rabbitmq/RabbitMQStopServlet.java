@@ -56,38 +56,6 @@ public class RabbitMQStopServlet extends HttpServlet {
 		logger.info("Executing rabbitMQProducerController.shutdown()...");
 		rabbitMQProducerController.shutdown();
 
-		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
-		//				rabbitMQProducerController.acquiredMessageHandlerPermits());
-		//
-		//		logger.debug("Calling rabbitMQProducerController.stopConsumerThreadsAndWaitForTermination()...");
-		//		rabbitMQProducerController.stopConsumerThreadsAndWaitForTermination();
-		//
-		//		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
-		//		//				rabbitMQProducerController.acquiredMessageHandlerPermits());
-		//		//		logger.debug("Sleeping 0 seconds...");
-		//		//		long longSleep = 2000;
-		//		//		try {
-		//		//			Thread.sleep(longSleep);
-		//		//		} catch (InterruptedException e) {
-		//		//		}
-		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
-		//				rabbitMQProducerController.acquiredMessageHandlerPermits());
-		//
-		//		logger.debug("Calling rabbitMQProducerController.waitForIncomingMessageHandlerThreadsToFinish()...");
-		//		rabbitMQProducerController.waitForIncomingMessageHandlerThreadsToFinish();	//TODO Check if this is thread-safe or if we need "volatile"
-		//
-		//		logger.debug("rabbitMQProducerController.acquiredMessageHandlerPermits() = {}",
-		//				rabbitMQProducerController.acquiredMessageHandlerPermits());
-		//
-		//		logger.debug("{} elements left in producerMsgQueue.",
-		//				RabbitMQProducerController.producerMsgQueue.size());
-		//
-		//		logger.debug("\n\nWaiting for the producerMsgQueue queue to empty...");
-		//		rabbitMQProducerController.waitForRabbitMQProducerQueueToEmpty();
-		//
-		//		logger.info("\n\nStopping the RabbitMQ producer threads...");
-		//		rabbitMQProducerController.stopProducerThreadsAndWaitForTermination();
-
 		response.setContentType("text/html;charset=UTF-8");
 		// PrintWriter out = response.getWriter();
 		try (PrintWriter out = response.getWriter()) {

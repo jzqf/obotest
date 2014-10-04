@@ -66,13 +66,9 @@ public class RabbitMQProducerController {
 		STOPPED, RUNNING
 	};
 
-	public enum RabbitMQProducerThreadStates {
-		STOPPED, RUNNING
-	};
-
 	private static final int NUM_RABBITMQ_PRODUCER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_PRODUCER_MS = 2000;
-	public static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 60;	//TODO Optimize queue size?
+	public static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Optimize queue size?
 	//	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
 	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	
@@ -132,44 +128,6 @@ public class RabbitMQProducerController {
 			Collections.synchronizedList(new ArrayList<RabbitMQProducerHelper>());
 	private final List<Thread> rabbitMQProducerThreads =
 			Collections.synchronizedList(new ArrayList<Thread>());
-
-	//	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
-	//	@Lock(LockType.READ)
-	//	public RabbitMQProducerThreadStates getProducerState() {
-	//		if (rabbitMQProducerThread != null && rabbitMQProducerThread.isAlive()) {
-	//			if (rabbitMQProducer != null) {
-	//				return rabbitMQProducer.getState();
-	//			} else {
-	//				// This should never happen. Am I being too careful?
-	//				logger.error("rabbitMQProducer is null, but its thread seems to be alive");
-	//				return RabbitMQProducerThreadStates.STOPPED;
-	//			}
-	//		} else {
-	//			return RabbitMQProducerThreadStates.STOPPED;
-	//		}
-	//	}
-	//
-	//	// NUM_RABBITMQ_PRODUCER_THREADS > 1:
-	//	@Lock(LockType.READ)
-	//	public RabbitMQProducerThreadStates getProducerState(int threadIndex) {
-	//		if (threadIndex < NUM_RABBITMQ_PRODUCER_THREADS) {
-	//			if (rabbitMQProducerThreads.get(threadIndex) != null && rabbitMQProducerThreads.get(threadIndex).isAlive()) {
-	//				if (rabbitMQProducerRunnables.get(threadIndex) != null) {
-	//					return rabbitMQProducerRunnables.get(threadIndex).getState();
-	//				} else {
-	//					// This should never happen. Am I being too careful?
-	//					logger.error("rabbitMQProducer {} is null, but its thread seems to be alive", threadIndex);
-	//					return RabbitMQProducerThreadStates.STOPPED;
-	//				}
-	//			} else {
-	//				return RabbitMQProducerThreadStates.STOPPED;
-	//			}
-	//		} else {
-	//			logger.error("threadIndex = {}, but NUM_RABBITMQ_PRODUCER_THREADS = {}",
-	//					threadIndex, NUM_RABBITMQ_PRODUCER_THREADS);
-	//			return RabbitMQProducerThreadStates.STOPPED;	// simpler than throwing an exception :-)
-	//		}
-	//	}
 
 	/*
 	 * @Startup ensures that this method is called when the application starts 
@@ -278,15 +236,18 @@ public class RabbitMQProducerController {
 	@Timeout
 	@Lock(LockType.WRITE)
 	public void start() {
-		logger.info("Request received to start RabbitMQ producer thread");
+		logger.info("Request received to start RabbitMQ producer thread(s)");
 		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
-		logger.debug("Calling heartBeat()...");
+		logger.info("Calling heartBeat()...");
 		this.heartBeat();	// will start producer thread(s), if necessary
 	}
 
 	@Schedule(second = "*/4", minute = "*", hour = "*")
 	@Lock(LockType.WRITE)
 	public void heartBeat() {
+
+		//		logger.info("Running...");
+		//		logger.info("RabbitMQProducerController.state = {}", RabbitMQProducerController.state);
 
 		if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.RUNNING) {
 			if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
@@ -394,7 +355,7 @@ public class RabbitMQProducerController {
 		 * Now that the blocking queue that is is used to hold outgoing messages
 		 * is empty, the producer thread(s) can be terminated.
 		 */
-		logger.info("Stopping the RabbitMQ consumer threads and waiting for them to terminate...");
+		logger.info("Stopping the RabbitMQ producer threads and waiting for them to terminate...");
 		stopProducerThreadsAndWaitForTermination();
 
 	}
@@ -431,44 +392,6 @@ public class RabbitMQProducerController {
 				}
 			}
 		}
-
-		// Another way of doing this that checks the "consumer state" instead
-		// of checking directly that the thread(s) has(have) terminated.:
-
-		//		long loopTime = 0;
-		//		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-		//			while (getConsumerState() != RabbitMQConsumerThreadStates.STOPPED) {
-		//				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
-		//				logger.debug("Waiting for RabbitMQ consumer thread to quit...");
-		//				loopTime += WAITING_LOOP_SLEEP_MS;
-		//				try {
-		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//				} catch (InterruptedException e) {
-		//				}
-		//				//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//				if (loopTime >= 30000) {
-		//					logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//					break;
-		//				}
-		//			}
-		//		} else {
-		//			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-		//				while (getConsumerState(threadIndex) != RabbitMQConsumerThreadStates.STOPPED) {
-		//					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;
-		//					logger.debug("Waiting for RabbitMQ consumer thread {} to quit...", threadIndex);
-		//					loopTime += WAITING_LOOP_SLEEP_MS;
-		//					try {
-		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//					} catch (InterruptedException e) {
-		//					}
-		//					//TODO Make this 30000 ms a configurable parameter or a final static variable
-		//					if (loopTime >= 30000) {
-		//						logger.debug("Timeout waiting for RabbitMQ consumer thread to quit");
-		//						break;
-		//					}
-		//				}
-		//			}
-		//		}
 
 		logger.info("Done");
 	}
@@ -526,16 +449,22 @@ public class RabbitMQProducerController {
 			/*
 			 * A request to start the producer threads is made repeatedly
 			 * in this loop. This is to ensure that these threads keep running
-			 * while we wait for all message handlers to finish processing
-			 * their incoming messages. There is no known reason
+			 * while we wait for the queue to empty. There is no known reason
 			 * why this should be be necessary - this is just defensive
 			 * programming to handle the unlikely case where, from somewhere,
 			 * a request come in to shut down these threads while we are waiting
-			 * for the message handlers to finish their processing.
+			 * for the queue to empty. In order to start these threads, it is 
+			 * important that this be done by executig start(), and *not* by
+			 * simply assigning the "RUNNING" state to the state attribute for
+			 * the producer controller singelton, i.e.,
+			 * RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+			 * This will not work for starting the threads in this case because 
+			 * heartBeat() will not run peridically while this method executes,
+			 * since this method and heartBeat() are both methods of the same 
+			 * class RabbitMQProducerController. To get around this issue, 
+			 * start() calls heartBeat() explicitly for us.
 			 */
-			//TODO This does not handle the case where we *want* to shut down without waiting for the message handlers to finish, but will this ever be needed?
-			//			start();	// call repeatedly, just in case
-			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+			start();	// call repeatedly, just in case
 
 			logger.info("{} message handlers still processing incoming messages...",
 					acquiredMessageHandlerPermits());
@@ -562,6 +491,7 @@ public class RabbitMQProducerController {
 					acquiredMessageHandlerPermits());
 		}
 
+		logger.info("Done");
 	}
 
 	/**
@@ -580,11 +510,18 @@ public class RabbitMQProducerController {
 			 * why this should be be necessary - this is just defensive
 			 * programming to handle the unlikely case where, from somewhere,
 			 * a request come in to shut down these threads while we are waiting
-			 * for the queue to empty.
+			 * for the queue to empty. In order to start these threads, it is 
+			 * important that this be done by executig start(), and *not* by
+			 * simply assigning the "RUNNING" state to the state attribute for
+			 * the producer controller singelton, i.e.,
+			 * RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+			 * This will not work for starting the threads in this case because 
+			 * heartBeat() will not run peridically while this method executes,
+			 * since this method and heartBeat() are both methods of the same 
+			 * class RabbitMQProducerController. To get around this issue, 
+			 * start() calls heartBeat() explicitly for us.
 			 */
-			//TODO This does not handle the case where we *want* to shut down without emptying the queue, but will this ever be needed?
-			//			this.start();	// call repeatedly, just in case
-			RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+			start();	// call repeatedly, just in case
 
 			logger.info("{} elements left in producerMsgQueue. Waiting for it to empty...",
 					producerMsgQueue.size());
@@ -610,6 +547,7 @@ public class RabbitMQProducerController {
 					producerMsgQueue.size());
 		}
 
+		logger.info("Done");
 	}
 
 	/**
@@ -643,44 +581,6 @@ public class RabbitMQProducerController {
 				}
 			}
 		}
-
-		// Another way of doing this that checks the "producer state" instead
-		// of checking directly that the thread(s) has(have) terminated.:
-
-		//		long loopTime = 0;
-		//		if (NUM_RABBITMQ_PRODUCER_THREADS == 1) {
-		//			while (this.getProducerState() != RabbitMQProducerThreadStates.STOPPED) {
-		//				stop();	// call repeatedly, just in case
-		//				logger.debug("Waiting for RabbitMQ producer thread to quit...");
-		//				loopTime += WAITING_LOOP_SLEEP_MS;
-		//				try {
-		//					Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//				} catch (InterruptedException e) {
-		//				}
-		//				// Wait maximum 60 seconds.
-		//				if (loopTime >= 60000) {
-		//					logger.warn("Timeout waiting for RabbitMQ producer thread to quit");
-		//					break;
-		//				}
-		//			}
-		//		} else {
-		//			for (int threadIndex = 0; threadIndex < rabbitMQProducerThreads.size(); threadIndex++) {
-		//				while (this.getProducerState(threadIndex) != RabbitMQProducerThreadStates.STOPPED) {
-		//				stop();	// call repeatedly, just in case
-		//					logger.debug("Waiting for RabbitMQ producer thread {} to quit...", threadIndex);
-		//					loopTime += WAITING_LOOP_SLEEP_MS;
-		//					try {
-		//						Thread.sleep(WAITING_LOOP_SLEEP_MS);
-		//					} catch (InterruptedException e) {
-		//					}
-		//					// Wait maximum 60 seconds.
-		//					if (loopTime >= 60000) {
-		//						logger.warn("Timeout waiting for RabbitMQ producer thread to quit");
-		//						break;
-		//					}
-		//				}
-		//			}
-		//		}
 
 		logger.info("Done");
 	}

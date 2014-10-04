@@ -5,9 +5,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
-import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerThreadStates;
 //TODO This must be eliminated or updated to something related to producing:
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
@@ -23,19 +21,9 @@ import com.rabbitmq.client.ShutdownSignalException;
 //@LocalBean
 public class RabbitMQProducerRunnable implements Runnable {
 
-	private volatile RabbitMQProducerThreadStates state = RabbitMQProducerThreadStates.STOPPED;
-
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducerRunnable.class);
 
-	RabbitMQProducerHelper messageProducerHelper = null;
-
-	public RabbitMQProducerThreadStates getState() {
-		return state;
-	}
-
-	public void setState(RabbitMQProducerThreadStates state) {
-		this.state = state;
-	}
+	private RabbitMQProducerHelper messageProducerHelper = null;
 
 	/*
 	 * This constructor is necessary, since this is a stateless session bean,
@@ -54,7 +42,6 @@ public class RabbitMQProducerRunnable implements Runnable {
 	public void run() {
 
 		logger.debug("Starting RabbitMQ message producer...");
-		this.setState(RabbitMQProducerThreadStates.RUNNING);
 
 		try {
 			messageProducerHelper.openConnection();
@@ -67,10 +54,9 @@ public class RabbitMQProducerRunnable implements Runnable {
 
 					while (true) {
 
-						logger.info("q={}, throttled={}",
-								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-								new Boolean(RabbitMQConsumerRunnable.throttled)
-								);
+						logger.debug(
+								"q={}. Calling messageProducerHelper.handlePublish()... (should reduce the queue)",
+								RabbitMQProducerController.producerMsgQueue.remainingCapacity());
 
 						try {
 							messageProducerHelper.handlePublish();
@@ -148,8 +134,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 			}
 		}
 
-		logger.debug("Thread exiting");
-		this.setState(RabbitMQProducerThreadStates.STOPPED);
+		logger.info("Thread exiting");
 
 	}
 
