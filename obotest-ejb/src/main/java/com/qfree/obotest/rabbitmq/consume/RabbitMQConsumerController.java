@@ -87,13 +87,8 @@ public class RabbitMQConsumerController {
 		STOPPED, RUNNING
 	};
 
-	public enum RabbitMQConsumerThreadStates {
-		STOPPED, RUNNING
-	};
-
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
-	//	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	/*
 	 * This is the maximum number of message handler threads that are allowed to
 	 * run simultaneously. This is set to a sufficiently large number that this
@@ -105,8 +100,33 @@ public class RabbitMQConsumerController {
 	 * maximum number of permits that it will allow to be acquired.
 	 */
 	public static final int MAX_MESSAGE_HANDLERS = 100;
+	/*
+	 * This is the maximum number of CDI events that have been fired from one of
+	 * the RabbitMQ consumer threads but which have not yet been acknowledged
+	 * by a stateless session been that receives the event in one of its methods
+	 * that is annotated with @Observes. The value set here should be larger 
+	 * than the maximum number of message handler threads that should ever be 
+	 * created. We should never reach this limit. It needs to be large enough so
+	 * that we never block when attempting to acquire a permit.
+	 */
+	public static final int MAX_UNACKNOWLEDGED_CDI_EVENTS = 100;
 
-	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
+	/*
+	 * This counting semaphore is used to count the number of CDI events that 
+	 * have been fired from one of the RabbitMQ consumer threads but which have
+	 * not yet been acknowledged by a stateless session been that receives the 
+	 * event in one of its methods that is annotated with @Observes. The number
+	 * of unacknowledged CDI events is used to throttle the RabbitMQ consumer
+	 * threads so that we do not fire a large number of CDI events that are not
+	 * acknowledged in a timely fashion. This is done to try to strike a balance
+	 * between the rate that RabbitMQ messages are consumed and the rate at 
+	 * which they can be processed and then published back to another RabbitMQ
+	 * exchanged. If the number of unacknowledged CDI events exceeds
+	 * UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER, throttling will be invoked until
+	 * the number of unacknowledged CDI events drops below
+	 * UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER. These limits are defined elsewhere.
+	 */
+	public static final Semaphore unacknowledgeCDIEventsCounterSemaphore = new Semaphore(MAX_UNACKNOWLEDGED_CDI_EVENTS);
 
 	/*
 	 * This counting semaphore is used to count the number of threads that are
@@ -119,6 +139,8 @@ public class RabbitMQConsumerController {
 	 * whenever the application is *re*deployed).
 	 */
 	public static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
+
+	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 
 	// This is for NUM_RABBITMQ_CONSUMER_THREADS == 1:
 	/*
@@ -244,9 +266,9 @@ public class RabbitMQConsumerController {
 	@Timeout
 	@Lock(LockType.WRITE)
 	public void start() {
-		logger.info("Request received to start RabbitMQ consumer thread");
+		logger.info("Request received to start RabbitMQ consumer thread(s)");
 		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
-		logger.debug("Calling heartBeat()...");
+		logger.info("Calling heartBeat()...");
 		this.heartBeat();	// will start consumer thread(s), if necessary
 	}
 

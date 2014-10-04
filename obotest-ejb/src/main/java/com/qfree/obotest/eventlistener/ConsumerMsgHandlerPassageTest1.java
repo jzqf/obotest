@@ -35,7 +35,16 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 	@Asynchronous
 	public void processPassage(@Observes @PassageQualifier PassageTest1Event event) {
 
-		logger.info("permits={}, q={}, throttled={}",
+		/* 
+		 * Release the permit that was acquired just before the CDI event that
+		 * is received in this methods was fired.
+		 */
+		logger.debug("Releasing unacknowledged CDI event permit. Unacked permits={}",
+				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
+		RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+
+		logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
+				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
 				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
 				new Boolean(RabbitMQConsumerRunnable.throttled)
@@ -48,19 +57,19 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 * during shutdown that all messages have been processed in the before 
 		 * waiting for the producer queue to empty.
 		 */
-		logger.info("Before acquiring permit. Available permits = {}",
+		logger.debug("Before acquiring message handler permit. Available permits = {}",
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 		if (RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire()) {
-			logger.info("After acquiring permit. Available permits = {}",
+			logger.debug("After acquiring message handler permit. Available permits = {}",
 					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 
 			try {
 				logger.debug("Start processing passage: {}...", event.toString());
-				try {
-					logger.info("Sleeping for 1000 ms to simulate doing some work...");
-					Thread.sleep(1000);		// simulate doing some work
-				} catch (InterruptedException e) {
-				}
+				//				try {
+				//					logger.debug("Sleeping for 500 ms to simulate doing some work...");
+				//					Thread.sleep(500);		// simulate doing some work
+				//				} catch (InterruptedException e) {
+				//				}
 				logger.debug("Finished processing passage: {}...", event.toString());
 
 				/*
@@ -96,7 +105,7 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 
 			} finally {
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
-				logger.info("Message handler permit released. Number of free permits = {}",
+				logger.debug("Message handler permit released. Number of free permits = {}",
 						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 			}
 
@@ -108,7 +117,8 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 
 	public boolean send(byte[] bytes) {
 
-		logger.info("permits={}, q={}, throttled={}, q-local{}",
+		logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
+				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
 				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
 				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
 				new Boolean(RabbitMQConsumerRunnable.throttled)
@@ -138,7 +148,8 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				success = RabbitMQProducerController.producerMsgQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS,
 						TimeUnit.MILLISECONDS);
 
-				logger.info("permits={}, q={}, throttled={}, success={}",
+				logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}, success={}",
+						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
 						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
 						RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
 						new Boolean(RabbitMQConsumerRunnable.throttled),
@@ -160,11 +171,11 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 			if (success) {
 				logger.debug("Message successfully entered into producer blocking queue.");
 			} else {
-				//TODO Can we ensure that the message to be queued, ie.e., "bytes", is not lost?
 				/*
 				 * Either the queue is full, or an interrupt was received while
 				 * waiting to publish the message. 
 				 */
+				//TODO Ensure that a "nack/reject" is sent back to the RabbitMQ broker. Then the message should *not* be lost.
 				logger.warn("\n**********\nMessage not entered into producer blocking queue!\n**********");
 
 				logger.info("RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",

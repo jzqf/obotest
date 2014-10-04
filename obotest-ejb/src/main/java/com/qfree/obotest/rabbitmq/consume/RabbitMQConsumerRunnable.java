@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerThreadStates;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
@@ -27,27 +26,32 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 	private static final int QUEUE_REMAINING_CAPACITY_LOW_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH / 3;
 	private static final int QUEUE_REMAINING_CAPACITY_HIGH_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH * 2 / 3;
-	private static final long WAITING_LOOP_SLEEP_MS = 1000;
-
-	private static volatile RabbitMQConsumerThreadStates state = RabbitMQConsumerThreadStates.STOPPED;
-
+	private static final int UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER = 2;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER?
+	private static final int UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER = 8;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER?
+	private static final long THROTTLE_WAITING_LOOP_SLEEP_MS = 200;
 
 	/**
-	 * When true, message consumption will be disabled until the number of 
-	 * free elements available in the producerMsgQueue queue rises above 
-	 * QUEUE_REMAINING_CAPACITY_HIGH_WATER.
+	 * When true, message consumption will be disabled. This variable is set 
+	 * the the logical OR of other "throttled" variables that are set true or
+	 * false based on specific conditions.
 	 */
 	public static volatile boolean throttled = false;
+	/**
+	 * Set to true when the number of free elements available in the 
+	 * producerMsgQueue queue drops below QUEUE_REMAINING_CAPACITY_LOW_WATER. It
+	 * will then stay false until the number of free elements subsequently rises
+	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
+	 */
+	public static volatile boolean throttled_ProducerMsgQueue = false;
+	/**
+	 * Set to true when the number of free elements available in the 
+	 * producerMsgQueue queue drops below QUEUE_REMAINING_CAPACITY_LOW_WATER. It
+	 * will then stay false until the number of free elements subsequently rises
+	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
+	 */
+	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
 
-	RabbitMQConsumerHelper messageConsumerHelper = null;
-
-	public RabbitMQConsumerThreadStates getState() {
-		return state;
-	}
-
-	public void setState(RabbitMQConsumerThreadStates state) {
-		this.state = state;
-	}
+	private RabbitMQConsumerHelper messageConsumerHelper = null;
 
 	/*
 	 * This constructor is necessary, since this is a stateless session bean,
@@ -66,7 +70,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	public void run() {
 
 		logger.info("Starting RabbitMQ message consumer...");
-		this.setState(RabbitMQConsumerThreadStates.RUNNING);
 
 		try {
 			messageConsumerHelper.openConnection();
@@ -79,25 +82,46 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 					while (true) {
 
-						// Update "throttled", if necessary:
+						// Update "throttled_ProducerMsgQueue", if necessary:
 						int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
-						logger.info("remainingCapacity = {}, throttled={}", remainingCapacity, new Boolean(throttled));
-						if (throttled) {
-							if (remainingCapacity > QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
-								logger.info("Message consumption throttling is now *off*");
-								throttled = false;
+						if (throttled_ProducerMsgQueue) {
+							if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
+								logger.info("Consumption throttling based on producer queue size is now *off*");
+								throttled_ProducerMsgQueue = false;
 							}
 						} else {
 							if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
-								logger.info("Message consumption throttling is now *on*");
-								throttled = true;
+								logger.info("Consumption throttling based on producer queue size is now *on*");
+								throttled_ProducerMsgQueue = true;
 							}
 						}
 
-						logger.info("permits={}, q={}, throttled={}",
+						// Update "throttled_UnacknowledgedCDIEvents", if necessary:
+						int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+								- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
+						if (throttled_UnacknowledgedCDIEvents) {
+							if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
+								logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
+								throttled_UnacknowledgedCDIEvents = false;
+							}
+						} else {
+							if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
+								logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
+								throttled_UnacknowledgedCDIEvents = true;
+							}
+						}
+
+						throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
+
+						logger.debug(
+								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
+								numUnacknowledgeCDIEvents,
+								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-								new Boolean(throttled)
+								remainingCapacity,
+								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
+								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
+								new Boolean(RabbitMQConsumerRunnable.throttled)
 								);
 
 						if (!throttled) {
@@ -132,13 +156,13 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 						} else {
 							/*
-							 * Wait a short while to allow the message producer thread(s) to publish
-							 * messages currently held in the RabbitMQProducerController.producerMsgQueue
-							 * queue, and then run through the loop again.
+							 * Wait a short while to allow the condition that triggered 
+							 * the throttling to recover, and then run through the loop
+							 * again.
 							 */
-							logger.info("Throttled. Sleeping for 1s.");
+							logger.info("Throttled. Sleeping for {} ms", THROTTLE_WAITING_LOOP_SLEEP_MS);
 							try {
-								Thread.sleep(WAITING_LOOP_SLEEP_MS);
+								Thread.sleep(THROTTLE_WAITING_LOOP_SLEEP_MS);
 							} catch (InterruptedException e) {
 							}
 						}
@@ -148,6 +172,13 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							logger.info("Request to stop detected. This thread will terminate.");
 							break;
 						}
+
+						//						logger.info("************** Sleeping for 0.5s to simulate throttling ***************");
+						//						try {
+						//							Thread.sleep(500);
+						//						} catch (InterruptedException e) {
+						//						}
+
 					}
 
 				} catch (IOException e) {
@@ -195,8 +226,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			}
 		}
 
-		logger.debug("Thread exiting");
-		this.setState(RabbitMQConsumerThreadStates.STOPPED);
-
+		logger.info("Thread exiting");
 	}
 }

@@ -3,6 +3,7 @@ package com.qfree.obotest.servlet.rabbitmq;
 import java.io.IOException;
 import java.io.PrintWriter;
 
+import javax.ejb.EJB;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -13,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
-import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
 
 @WebServlet(description = "Starts the RabbitMQ producer thread", urlPatterns = { "/start_rabbitmq_producer" })
 public class RabbitMQStartProducerServlet extends HttpServlet {
@@ -21,8 +21,8 @@ public class RabbitMQStartProducerServlet extends HttpServlet {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQStartProducerServlet.class);
 
-	//	@EJB
-	//	RabbitMQProducerController rabbitMQProducerController;
+	@EJB
+	RabbitMQProducerController rabbitMQProducerController;
 
 	public RabbitMQStartProducerServlet() {
 		super();
@@ -49,10 +49,10 @@ public class RabbitMQStartProducerServlet extends HttpServlet {
 	protected void processRequest(HttpServletRequest request,
 			HttpServletResponse response) throws ServletException, IOException {
 
-		//		logger.debug("Calling rabbitMQProducerController.start()...");
-		//		rabbitMQProducerController.start();
-		logger.info("Setting RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING...");
-		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
+		logger.debug("Calling rabbitMQProducerController.start()...");
+		rabbitMQProducerController.start();
+		//		logger.info("Setting RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING...");
+		//		RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 
 		response.setContentType("text/html;charset=UTF-8");
 		// PrintWriter out = response.getWriter();

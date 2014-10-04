@@ -126,7 +126,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
-			logger.info("permits={}, q={}, throttled={}",
+			logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
+					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
 					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
 					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
 					new Boolean(RabbitMQConsumerRunnable.throttled)
@@ -223,9 +224,26 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			passagePayload.setImage_name(filename);
 			passagePayload.setImageBytes(imageBytes);
 
-			logger.debug("[{}]: Firing CDI event for {}", subClassName, passagePayload);
-			passageEvent.fire(passagePayload);
-			logger.debug("[{}]: Returned from firing event", subClassName);
+			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
+				logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName, passagePayload,
+						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
+				try {
+					passageEvent.fire(passagePayload);
+				} catch (Throwable e) {
+					/*
+					 * If an exception was thrown firing a CDI event (I don't
+					 * know if this is even possible, we release the permit just
+					 * acquired because there will probably be no session bean 
+					 * to receive the event that would normally do this. 
+					 */
+					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+				}
+				logger.debug("[{}]: Returned from firing event", subClassName);
+			} else {
+				//TODO Ensure that a "nack/reject" is sent back to the RabbitMQ broker. Then the message should *not* be lost.
+				logger.warn("\n**********\nPermit not acquired for unacknowledged CDI event to be sent. The message will be lost!\n**********");
+			}
 
 		} catch (InvalidProtocolBufferException e) {
 			logger.error("[{}]: An InvalidProtocolBufferException was thrown", subClassName);
