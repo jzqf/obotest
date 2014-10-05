@@ -112,7 +112,7 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		channel.basicConsume(IMAGE_QUEUE_NAME, false, consumer);
 	}
 
-	public void handleDeliveries() throws ShutdownSignalException,
+	public void handleNextDelivery() throws ShutdownSignalException,
 			ConsumerCancelledException, InterruptedException, IOException {
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {

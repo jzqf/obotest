@@ -316,19 +316,14 @@ public class RabbitMQProducerController {
 	 */
 	@Lock(LockType.WRITE)
 	public void shutdown() {
+
 		/*
-		 * Stop the RabbitMQ consumer thread(s) and then wait for them to 
-		 * terminate.
-		 * 
-		 * The RabbitMQConsumerController bean is responsible for shutting 
-		 * itself down in its @PreDestroy method, but the @PreDestroy method of
-		 * the RabbitMQConsumerController bean will not run until *after* this
-		 * RabbitMQProducerController bean is destroyed by the container (due to
-		 * the dependency set in the @DependsOn annotation above). Therefore, 
-		 * we force the consumer threads to stop here:
+		 * Disable the RabbitMQ consumer thread(s) so that we can monitor and
+		 * confirm that all consumed messages are fully processed before we
+		 * shut down. This confirmation and monitoring is done below.
 		 */
-		logger.info("Stopping the RabbitMQ consumer threads and waiting for them to terminate...");
-		stopConsumerThreadsAndWaitForTermination();
+		logger.info("Disabling the RabbitMQ consumer threads...");
+		disableConsumerThreads();
 
 		/*
 		 * Now that the consumer thread(s) are terminated, no new CDI events 
@@ -369,12 +364,52 @@ public class RabbitMQProducerController {
 		logger.info("Stopping the RabbitMQ producer threads and waiting for them to terminate...");
 		stopProducerThreadsAndWaitForTermination();
 
+		/*
+		 * Finally, stop the RabbitMQ consumer thread(s), which should be 
+		 * disabled, and then wait for them to terminate.
+		 * 
+		 * The RabbitMQConsumerController bean is responsible for shutting 
+		 * itself down in its @PreDestroy method, but the @PreDestroy method of
+		 * the RabbitMQConsumerController bean will not run until *after* this
+		 * RabbitMQProducerController bean is destroyed by the container (due to
+		 * the dependency set in the @DependsOn annotation above). Therefore, 
+		 * we force the consumer threads to stop here:
+		 */
+		logger.info("Stopping the RabbitMQ consumer threads and waiting for them to terminate...");
+		stopConsumerThreadsAndWaitForTermination();
+
+	}
+
+	/**
+	 * Disables the RabbitMQconsumer thread(s).
+	 */
+	@Lock(LockType.WRITE)
+	public void disableConsumerThreads() {
+		/*
+		 * We only "disable" the consumer threads if they are currently running;
+		 * If, instead, the threads are currently stopped, setting the state to
+		 * DISABLED will not necessarily cause any problems, but it does not
+		 * follow a proper state machine mechanism that only running threads 
+		 * can be disabled.
+		 */
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
+			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+		} else {
+			logger.warn("Attempt to disable consumer threads when current state is {}",
+					RabbitMQConsumerController.state);
+		}
+		logger.info("Done");
 	}
 
 	/**
 	 * Stops the RabbitMQconsumer thread(s) and then wait for it(them) to 
 	 * terminate.
 	 */
+	//TODO Consider eliminating this method and replace the call above to it 
+	//     with a call to RabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination
+	//     since they are essentially the same. Remember that the RabbitMQConsumerController
+	//     bean will be unavailable and its heartBeat() method will not run while that method
+	//     executes here. So test carefully before committing this change.
 	@Lock(LockType.WRITE)
 	public void stopConsumerThreadsAndWaitForTermination() {
 

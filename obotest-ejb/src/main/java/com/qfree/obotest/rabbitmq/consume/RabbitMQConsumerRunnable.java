@@ -1,6 +1,7 @@
 package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +29,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	private static final int QUEUE_REMAINING_CAPACITY_HIGH_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH * 2 / 3;
 	private static final int UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER = 2;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER?
 	private static final int UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER = 8;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER?
-	private static final long THROTTLE_WAITING_LOOP_SLEEP_MS = 200;
+	private static final long THROTTLED_WAITING_LOOP_SLEEP_MS = 200;
+	private static final long DISABLED_WAITING_LOOP_SLEEP_MS = 1000;
 
 	/**
 	 * When true, message consumption will be disabled. This variable is set 
@@ -51,6 +53,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 */
 	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
 
+	private final UUID uuid = UUID.randomUUID();
+
 	private RabbitMQConsumerHelper messageConsumerHelper = null;
 
 	/*
@@ -69,7 +73,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	@Override
 	public void run() {
 
-		logger.info("Starting RabbitMQ message consumer...");
+		logger.info("Starting RabbitMQ message consumer. UUID = {}...", uuid);
 
 		try {
 			messageConsumerHelper.openConnection();
@@ -82,87 +86,106 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 					while (true) {
 
-						// Update "throttled_ProducerMsgQueue", if necessary:
-						int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
-						if (throttled_ProducerMsgQueue) {
-							if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
-								logger.info("Consumption throttling based on producer queue size is now *off*");
-								throttled_ProducerMsgQueue = false;
+						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
+
+							// Update "throttled_ProducerMsgQueue", if necessary:
+							int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
+							if (throttled_ProducerMsgQueue) {
+								if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
+									logger.info("Consumption throttling based on producer queue size is now *off*");
+									throttled_ProducerMsgQueue = false;
+								}
+							} else {
+								if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
+									logger.info("Consumption throttling based on producer queue size is now *on*");
+									throttled_ProducerMsgQueue = true;
+								}
 							}
-						} else {
-							if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
-								logger.info("Consumption throttling based on producer queue size is now *on*");
-								throttled_ProducerMsgQueue = true;
+
+							// Update "throttled_UnacknowledgedCDIEvents", if necessary:
+							int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+									- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+											.availablePermits();
+							if (throttled_UnacknowledgedCDIEvents) {
+								if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
+									logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
+									throttled_UnacknowledgedCDIEvents = false;
+								}
+							} else {
+								if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
+									logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
+									throttled_UnacknowledgedCDIEvents = true;
+								}
 							}
-						}
 
-						// Update "throttled_UnacknowledgedCDIEvents", if necessary:
-						int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
-								- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
-						if (throttled_UnacknowledgedCDIEvents) {
-							if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
-								logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
-								throttled_UnacknowledgedCDIEvents = false;
-							}
-						} else {
-							if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
-								logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
-								throttled_UnacknowledgedCDIEvents = true;
-							}
-						}
+							throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
 
-						throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
+							logger.debug(
+									"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
+									numUnacknowledgeCDIEvents,
+									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS
+											-
+											RabbitMQConsumerController.messageHandlerCounterSemaphore
+													.availablePermits(),
+									remainingCapacity,
+									new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
+									new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
+									new Boolean(RabbitMQConsumerRunnable.throttled)
+									);
 
-						logger.debug(
-								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
-								numUnacknowledgeCDIEvents,
-								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
-								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-								remainingCapacity,
-								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-								new Boolean(RabbitMQConsumerRunnable.throttled)
-								);
+							if (!throttled) {
 
-						if (!throttled) {
+								try {
+									messageConsumerHelper.handleNextDelivery();
+								} catch (InterruptedException e) {
+									/*
+									 * Code elsewhere could be requesting that this
+									 * thread be terminated. This is checked for below.
+									 */
+									logger.info("InterruptedException received.");
+								} catch (InvalidProtocolBufferException e) {
+									logger.info(
+											"InvalidProtocolBufferException received. The RabbitMQ connection will close.",
+											e);
+									break;
+								} catch (IOException e) {
+									logger.error("IOException received. The RabbitMQ connection will close.", e);
+									break;
+								} catch (ShutdownSignalException e) {
+									logger.info(
+											"ShutdownSignalException received. The RabbitMQ connection will close.", e);
+									break;
+								} catch (ConsumerCancelledException e) {
+									logger.info(
+											"ConsumerCancelledException received. The RabbitMQ connection will close.",
+											e);
+									break;
+								} catch (Throwable e) {
+									// We log the exception, but do not terminate this thread.
+									logger.error("Unexpected exception caught.", e);
+								}
 
-							try {
-								messageConsumerHelper.handleDeliveries();
-							} catch (InterruptedException e) {
+							} else {
 								/*
-								 * Code elsewhere could be requesting that this
-								 * thread be terminated. This is checked for below.
+								 * Wait a short while to allow the condition that triggered 
+								 * the throttling to recover, and then run through the loop
+								 * again.
 								 */
-								logger.info("InterruptedException received.");
-							} catch (InvalidProtocolBufferException e) {
-								logger.info(
-										"InvalidProtocolBufferException received. The RabbitMQ connection will close.",
-										e);
-								break;
-							} catch (IOException e) {
-								logger.error("IOException received. The RabbitMQ connection will close.", e);
-								break;
-							} catch (ShutdownSignalException e) {
-								logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
-								break;
-							} catch (ConsumerCancelledException e) {
-								logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.",
-										e);
-								break;
-							} catch (Throwable e) {
-								// We log the exception, but do not terminate this thread.
-								logger.error("Unexpected exception caught.", e);
+								logger.info("Throttled. Sleeping for {} ms", THROTTLED_WAITING_LOOP_SLEEP_MS);
+								try {
+									Thread.sleep(THROTTLED_WAITING_LOOP_SLEEP_MS);
+								} catch (InterruptedException e) {
+								}
 							}
 
-						} else {
+						} else if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
 							/*
-							 * Wait a short while to allow the condition that triggered 
-							 * the throttling to recover, and then run through the loop
-							 * again.
+							 * Wait a short while to avoid spinning in a tight loop,
+							 * and then continue in case the state has changed.
 							 */
-							logger.info("Throttled. Sleeping for {} ms", THROTTLE_WAITING_LOOP_SLEEP_MS);
+							logger.info("Disabled. Sleeping for {} ms", DISABLED_WAITING_LOOP_SLEEP_MS);
 							try {
-								Thread.sleep(THROTTLE_WAITING_LOOP_SLEEP_MS);
+								Thread.sleep(DISABLED_WAITING_LOOP_SLEEP_MS);
 							} catch (InterruptedException e) {
 							}
 						}
@@ -172,12 +195,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							logger.info("Request to stop detected. This thread will terminate.");
 							break;
 						}
-
-						//						logger.info("************** Sleeping for 0.5s to simulate throttling ***************");
-						//						try {
-						//							Thread.sleep(500);
-						//						} catch (InterruptedException e) {
-						//						}
 
 					}
 

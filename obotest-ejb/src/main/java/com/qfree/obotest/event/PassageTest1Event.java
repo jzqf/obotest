@@ -6,16 +6,16 @@ public class PassageTest1Event implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private String image_name;
+	private String imageName;
 
 	private byte[] imageBytes;
 
-	public String getImage_name() {
-		return image_name;
+	public String getImageName() {
+		return imageName;
 	}
 
-	public void setImage_name(String image_name) {
-		this.image_name = image_name;
+	public void setImageName(String imageName) {
+		this.imageName = imageName;
 	}
 
 	public byte[] getImageBytes() {
@@ -28,7 +28,7 @@ public class PassageTest1Event implements Serializable {
 
 	@Override
 	public String toString() {
-		return "PassageTest1Event [name:" + this.image_name + ", bytes:" + imageBytes.length + "]";
+		return "PassageTest1Event [name:" + this.imageName + ", bytes:" + imageBytes.length + "]";
 	}
 
 }

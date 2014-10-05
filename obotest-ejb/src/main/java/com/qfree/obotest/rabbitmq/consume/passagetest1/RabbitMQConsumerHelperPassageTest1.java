@@ -119,9 +119,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void configureConsumer() throws IOException {
 		consumer = new QueueingConsumer(channel);
 		channel.basicConsume(PASSAGE_QUEUE_NAME, false, consumer);
+		logger.info("Channel number = {}", channel.getChannelNumber());
 	}
 
-	public void handleDeliveries() throws InterruptedException, IOException, InvalidProtocolBufferException {
+	public void handleNextDelivery() throws InterruptedException, IOException, InvalidProtocolBufferException {
 
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
@@ -144,6 +145,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * 
 				 * TODO Update this to publish an outgoing message
 				 * or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
+				 * TODO WE also need to enter an element in the acknowledgement queue if mode=AFTER_SEND
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
@@ -221,7 +223,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			byte[] imageBytes = passage.getImage().toByteArray();
 
 			PassageTest1Event passagePayload = new PassageTest1Event();
-			passagePayload.setImage_name(filename);
+			passagePayload.setImageName(filename);
 			passagePayload.setImageBytes(imageBytes);
 
 			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {

@@ -79,7 +79,7 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				 * First, create a RabbitMQ message payload.
 				 */
 				PassageTest1Protos.PassageTest1.Builder passage = PassageTest1Protos.PassageTest1.newBuilder();
-				passage.setImageName(event.getImage_name());
+				passage.setImageName(event.getImageName());
 				passage.setImage(ByteString.copyFrom(event.getImageBytes()));
 				byte[] passageBytes = passage.build().toByteArray();
 

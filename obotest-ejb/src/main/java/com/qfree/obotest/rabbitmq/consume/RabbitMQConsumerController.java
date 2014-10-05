@@ -3,6 +3,8 @@ package com.qfree.obotest.rabbitmq.consume;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 
 import javax.annotation.PostConstruct;
@@ -29,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.HelperBean1;
 import com.qfree.obotest.rabbitmq.HelperBean2;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
 
 /*
@@ -84,11 +87,18 @@ public class RabbitMQConsumerController {
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerController.class);
 
 	public enum RabbitMQConsumerControllerStates {
-		STOPPED, RUNNING
+		STOPPED, DISABLED, RUNNING
 	};
+
+	public enum AckAlgorithms {
+		AFTER_RECEIVED, AFTER_SENT
+	};
+
+	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_RECEIVED;
 
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
+
 	/*
 	 * This is the maximum number of message handler threads that are allowed to
 	 * run simultaneously. This is set to a sufficiently large number that this
@@ -110,6 +120,13 @@ public class RabbitMQConsumerController {
 	 * that we never block when attempting to acquire a permit.
 	 */
 	public static final int MAX_UNACKNOWLEDGED_CDI_EVENTS = 100;
+
+	/*
+	 * This is the size of the queue that holds RabbitMQMsgAck objects sent
+	 * back to the consumer threads to ack/nack messages that have been 
+	 * processed in other threads, either successfully or unsuccessfully.
+	 */
+	public static final int ACKNOWLEDGEMENT_QUEUE_LENGTH = 2000;	//TODO Optimize queue size?
 
 	/*
 	 * This counting semaphore is used to count the number of CDI events that 
@@ -139,6 +156,14 @@ public class RabbitMQConsumerController {
 	 * whenever the application is *re*deployed).
 	 */
 	public static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
+
+	/*
+	 * This queue holds the RabbitMQ delivery tags and other details for 
+	 * messages that are processed in other threads but which must be 
+	 * acked/nacked in the consumer threads.
+	 */
+	public static final BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
+			ACKNOWLEDGEMENT_QUEUE_LENGTH);
 
 	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 
@@ -270,6 +295,48 @@ public class RabbitMQConsumerController {
 		RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
 		logger.info("Calling heartBeat()...");
 		this.heartBeat();	// will start consumer thread(s), if necessary
+	}
+
+	/**
+	 * "Disables" the MessageMQ consumer thread(s).
+	 */
+	@Lock(LockType.WRITE)
+	public void disable() {
+		logger.info("Request received to enable RabbitMQ consumer thread(s)");
+		/*
+		 * We only "disable" the consumer threads if they are currently running;
+		 * If, instead, the threads are currently stopped, setting the state to
+		 * DISABLED will not necessarily cause any problems, but it does not
+		 * follow a proper state machine mechanism that only running threads 
+		 * can be disabled.
+		 */
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
+			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+		} else {
+			logger.warn("Attempt to disable consumer threads when current state is {}",
+					RabbitMQConsumerController.state);
+		}
+	}
+
+	/**
+	 * "Enables" the MessageMQ consumer thread(s).
+	 */
+	@Lock(LockType.WRITE)
+	public void enable() {
+		logger.info("Request received to enable RabbitMQ consumer thread(s)");
+		/*
+		 * We only "enable" the consumer threads if they are currently disabled;
+		 * If, instead, the threads are currently stopped, setting the state to
+		 * RUNNING will start the threads, which is not the same as "enabling"
+		 * the threads. "Enabling" stopped threads also does not follow a proper
+		 * state machine mechanism that only disabled threads can be enabled.
+		 */
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
+			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
+		} else {
+			logger.warn("Attempt to enable consumer threads when current state is {}",
+					RabbitMQConsumerController.state);
+		}
 	}
 
 	@Schedule(second = "*/4", minute = "*", hour = "*")
