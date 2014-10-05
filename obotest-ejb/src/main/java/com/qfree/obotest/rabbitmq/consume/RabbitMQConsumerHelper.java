@@ -1,10 +1,13 @@
 package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 
 public interface RabbitMQConsumerHelper {
+
+	public void registerConsumerThreadUUID(UUID consumerThreadUUID);
 
 	public void openConnection() throws IOException;
 

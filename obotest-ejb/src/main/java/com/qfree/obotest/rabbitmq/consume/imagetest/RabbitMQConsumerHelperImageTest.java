@@ -1,6 +1,7 @@
 package com.qfree.obotest.rabbitmq.consume.imagetest;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import javax.ejb.Asynchronous;
 import javax.ejb.Lock;
@@ -54,6 +55,8 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 	 */
 	String subClassName = null;
 
+	private UUID consumerThreadUUID = null;
+
 	Connection connection = null;
 	Channel channel = null;
 	QueueingConsumer consumer = null;
@@ -70,6 +73,10 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		 * were done, this field will contain the name of this class, of course.
 		 */
 		this.subClassName = this.getClass().getSimpleName();
+	}
+
+	public void registerConsumerThreadUUID(UUID consumerThreadUUID) {
+		this.consumerThreadUUID = consumerThreadUUID;
 	}
 
 	public void openConnection() throws IOException {

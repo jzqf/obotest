@@ -75,6 +75,15 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 		logger.info("Starting RabbitMQ message consumer. UUID = {}...", uuid);
 
+		/*
+		 * Let the helper bean know the thread's UUID so that the helper can
+		 * record this in a RabbitMQMsgAck object which can then be packaged in
+		 * a CDI event together with the message data. It then 
+		 * fires this CDI event, which is received in the @Observes method of a
+		 * message handler.
+		 */
+		messageConsumerHelper.registerConsumerThreadUUID(uuid);
+
 		try {
 			messageConsumerHelper.openConnection();
 			try {

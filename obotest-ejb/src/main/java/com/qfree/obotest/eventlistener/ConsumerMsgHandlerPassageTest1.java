@@ -15,7 +15,9 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
@@ -49,6 +51,8 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
 				new Boolean(RabbitMQConsumerRunnable.throttled)
 				);
+
+		RabbitMQMsgAck rabbitMQMsgAck = event.getRabbitMQMsgAck();
 
 		/*
 		 * Attempt to acquire a permit to process this message. This mechanism
@@ -100,7 +104,14 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				if (success) {
 					logger.debug("Message successfully queued.");
 				} else {
-					logger.warn("\n**********\nMessage could not be queued. It will be lost!\n**********");
+					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+						rabbitMQMsgAck.setRejected(true);
+						rabbitMQMsgAck.setRequeueRejectedMsg(true);
+						//TODO We must enter rabbitMQMsgAck into the acknowledgement queue, acknowledgementQueue
+						logger.warn("Message could not be queued.");
+					} else {
+						logger.warn("\n**********\nMessage could not be queued. It will be lost!\n**********");
+					}
 				}
 
 			} finally {
@@ -110,7 +121,14 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 			}
 
 		} else {
-			logger.warn("\n**********\nPermit not acquired to process message. The message will be lost!\n**********");
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+				rabbitMQMsgAck.setRejected(true);
+				rabbitMQMsgAck.setRequeueRejectedMsg(true);
+				//TODO We must enter rabbitMQMsgAck into the acknowledgement queue, acknowledgementQueue
+				logger.warn("Permit not acquired to process message.");
+			} else {
+				logger.warn("\n**********\nPermit not acquired to process message. The message will be lost!\n**********");
+			}
 		}
 
 	}
