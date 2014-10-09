@@ -98,6 +98,7 @@ public class RabbitMQConsumerController {
 
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
+	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
 
 	/*
 	 * This is the maximum number of message handler threads that are allowed to
@@ -156,6 +157,23 @@ public class RabbitMQConsumerController {
 	 * whenever the application is *re*deployed).
 	 */
 	public static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
+
+	/*
+	 * This semaphore is used to enable a consumer threads to know if another
+	 * consumer thread is busy acknowledging messages from the acknowledgement
+	 * (blocking) queue. This is semaphore is only needed when there is more
+	 * than a single consumer thread running. In particular, it enables code to
+	 * ensure that _another_ consumer thread is not processig the 
+	 * acknowledgement queue (removing all elements and then returning those
+	 * elements to the queue that are for another thread), and therefore it is 
+	 * OK to test if the queue is empty or not.
+	 * 
+	 * Since we define the semaphore with the same number of permits as 
+	 * consumer threads, acquiring a permit should never block.
+	 */
+	public static final int MAX_ACK_QUEUE_PERMITS = NUM_RABBITMQ_CONSUMER_THREADS;
+	public static final Semaphore acknowledgementQueueBusyCounterSemaphore = new Semaphore(
+			MAX_ACK_QUEUE_PERMITS);
 
 	/*
 	 * This queue holds the RabbitMQ delivery tags and other details for 
@@ -425,8 +443,9 @@ public class RabbitMQConsumerController {
 				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
 				logger.info("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
-					//TODO Make this 30000 ms a configurable parameter or a final static variable
-					rabbitMQConsumerThread.join(30000);	// Wait maximum 30 seconds
+					rabbitMQConsumerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ consumer thread terminated or timed out after {} ms",
+							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
 				} catch (InterruptedException e) {
 				}
 			}
@@ -437,8 +456,9 @@ public class RabbitMQConsumerController {
 					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
 					logger.info("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
 					try {
-						//TODO Make this 30000 ms a configurable parameter or a final static variable
-						rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+						rabbitMQConsumerThreads.get(threadIndex).join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ consumer thread {} terminated or timed out after {} ms", threadIndex,
+								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
 					} catch (InterruptedException e) {
 					}
 				}

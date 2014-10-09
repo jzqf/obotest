@@ -49,21 +49,29 @@ public class RabbitMQProducerRunnable implements Runnable {
 			messageProducerHelper.openConnection();
 			try {
 				messageProducerHelper.openChannel();
-				try {
 
-					//TODO This must be eliminated or updated to something related to producing:
-					//					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
+				//TODO This must be eliminated or updated to something related to producing:
+				//				try {
+				//
+				//					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
 
 					while (true) {
 
-						logger.info(
-								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
+						/*
+						 *	UE:  number of Unacknowledged CDI Events
+						*	MH:  number of message handlers running
+						*	PQ:  number of elements in the producer message queue
+						*	AQ:  number of elements in the acknowledgement queue
+						 */
+						logger.debug(
+								"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
 								RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS -
 										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
 												.availablePermits(),
 								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+								RabbitMQProducerController.producerMsgQueue.size(),
+								RabbitMQConsumerController.acknowledgementQueue.size(),
 								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
 								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
 								new Boolean(RabbitMQConsumerRunnable.throttled)
@@ -72,39 +80,38 @@ public class RabbitMQProducerRunnable implements Runnable {
 						try {
 							messageProducerHelper.handlePublish();
 						} catch (InterruptedException e) {
-							/*
-							 * Code elsewhere could be requesting that this
-							 * thread be terminated. This is checked for below.
-							 */
-							logger.info("InterruptedException received.");
+							logger.warn("InterruptedException received.");
 						} catch (ShutdownSignalException e) {
+							// I'm not sure if/when this will occur.
 							logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
 							break;
-							//TODO Either eliminate this catch block or rename "consumer" to something else here in this message
 						} catch (ConsumerCancelledException e) {
+							// I'm not sure if/when this will occur.
 							logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.", e);
 							break;
 						} catch (IOException e) {
-							logger.error("IOException received. The RabbitMQ connection will close.", e);
-							break;
+							/*
+							 * TODO Catch this exception in handlePublish()? At any rate, the oroginal consumed
+							 *      message should probably be acked/rejected/dead-lettered, either there or here.
+							 */
+							logger.error("IOException received.", e);
 						} catch (Throwable e) {
+							// I'm not sure if/when this will occur.
 							// We log the exception, but do not terminate this thread.
 							logger.error("Unexpected exception caught.", e);
 						}
 
-						logger.trace("Checking if shutdown was requested...");
 						if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
 							logger.info("Request to stop detected. This thread will terminate.");
 							break;
 						}
 					}
 
-				} catch (Exception e) {
-					//TODO Either eliminate this try block or rename "consumer" to something else here in this message
-					logger.error(
-							"Exception thrown setting up consumer object for RabbitMQ channel. This thread will terminate.",
-							e);
-				}
+				//				} catch (Exception e) {
+				//					logger.error(
+				//							"Exception thrown ... for RabbitMQ channel. This thread will terminate.",
+				//							e);
+				//				}
 
 			} catch (IOException e) {
 				logger.error(

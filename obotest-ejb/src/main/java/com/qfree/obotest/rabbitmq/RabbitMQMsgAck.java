@@ -59,4 +59,10 @@ public class RabbitMQMsgAck {
 		this.requeueRejectedMsg = requeueRejectedMsg;
 	}
 
+	@Override
+	public String toString() {
+		return "RabbitMQMsgAck [consumerThreadUUID=" + consumerThreadUUID + ", deliveryTag=" + deliveryTag
+				+ ", rejected=" + rejected + ", requeueRejectedMsg=" + requeueRejectedMsg + "]";
+	}
+
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 
 public interface RabbitMQConsumerHelper {
 
@@ -20,5 +21,7 @@ public interface RabbitMQConsumerHelper {
 	public void configureConsumer() throws IOException;
 
 	public void handleNextDelivery() throws InterruptedException, IOException, InvalidProtocolBufferException;
+
+	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) throws IOException;
 
 }

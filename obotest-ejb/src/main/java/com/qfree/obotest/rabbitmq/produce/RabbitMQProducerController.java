@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.HelperBean1;
 import com.qfree.obotest.rabbitmq.HelperBean2;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 
@@ -71,6 +72,7 @@ public class RabbitMQProducerController {
 	public static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Optimize queue size?
 	//	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
 	private static final long WAITING_LOOP_SLEEP_MS = 1000;
+	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
 	
 	/*
 	 * This queue holds the RabbitMQ messages waiting to be sent to a RabbitMQ
@@ -78,7 +80,7 @@ public class RabbitMQProducerController {
 	 * 
 	 *     boolean sent = send(byte[] bytes);
 	 */
-	public static final BlockingQueue<byte[]> producerMsgQueue = new LinkedBlockingQueue<>(
+	public static final BlockingQueue<RabbitMQMsgEnvelope> producerMsgQueue = new LinkedBlockingQueue<>(
 			PRODUCER_BLOCKING_QUEUE_LENGTH);
 
 	@Resource
@@ -326,17 +328,17 @@ public class RabbitMQProducerController {
 		disableConsumerThreads();
 
 		/*
-		 * Now that the consumer thread(s) are terminated, no new CDI events 
+		 * Now that the consumer thread(s) are disabled, no new CDI events 
 		 * will be fired, but there may be outstanding CDI events that have not
 		 * be received by a message handler by its @Observes method. We must 
-		 * wait for those outstanding CDI events to be recieved and acknowledged
+		 * wait for those outstanding CDI events to be received and acknowledged
 		 * by message handlers. 
 		 */
 		logger.info("Waiting for unacknowledged CDI events to be acknowledged by message handlers...");
 		waitForAllCDIEventsToBeAcknowledged();
 
 		/*
-		 * Now that the consumer thread(s) are terminated and there are no 
+		 * Now that the consumer thread(s) are disabled and there are no 
 		 * unacknowledged CDI events, there will be no new incoming messages to
 		 * process, but some message handler threads may still be busy 
 		 * processing incoming messages that were received a little earlier. We
@@ -348,7 +350,7 @@ public class RabbitMQProducerController {
 		waitForIncomingMessageHandlerThreadsToFinish();
 
 		/* 
-		 * Now that the consumer thread(s) are terminated and, in addition, all
+		 * Now that the consumer thread(s) are disabled and, in addition, all
 		 * message handler threads have finished processing their coming 
 		 * messages, the outgoing message queue can can be allowed to empty as
 		 * the messages in this queue are published by the RabbitMQ producer 
@@ -402,47 +404,6 @@ public class RabbitMQProducerController {
 	}
 
 	/**
-	 * Stops the RabbitMQconsumer thread(s) and then wait for it(them) to 
-	 * terminate.
-	 */
-	//TODO Consider eliminating this method and replace the call above to it 
-	//     with a call to RabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination
-	//     since they are essentially the same. Remember that the RabbitMQConsumerController
-	//     bean will be unavailable and its heartBeat() method will not run while that method
-	//     executes here. So test carefully before committing this change.
-	@Lock(LockType.WRITE)
-	public void stopConsumerThreadsAndWaitForTermination() {
-
-		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
-			if (RabbitMQConsumerController.rabbitMQConsumerThread != null
-					&& RabbitMQConsumerController.rabbitMQConsumerThread.isAlive()) {
-				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
-				logger.debug("Waiting for RabbitMQ consumer thread to terminate...");
-				try {
-					//TODO Make this 30000 ms a configurable parameter or a final static variable
-					RabbitMQConsumerController.rabbitMQConsumerThread.join(30000);	// Wait maximum 30 seconds
-				} catch (InterruptedException e) {
-				}
-			}
-		} else {
-			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
-				if (RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex) != null
-						&& RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
-					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
-					logger.debug("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
-					try {
-						//TODO Make this 30000 ms a configurable parameter or a final static variable
-						RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
-					} catch (InterruptedException e) {
-					}
-				}
-			}
-		}
-
-		logger.info("Done");
-	}
-
-	/**
 	 * Waits for all unacknowledged CDI events, if any, to be acknowledged by 
 	 * message handlers. These correspond to CDI events that have been fired,
 	 * but not received by a message handler by its @Observes method.
@@ -484,8 +445,7 @@ public class RabbitMQProducerController {
 			} catch (InterruptedException e) {
 			}
 
-			//TODO Make this 30000 ms a configurable parameter or a final static variable
-			if (loopTime >= 30000) {
+			if (loopTime >= MAX_WAIT_BEFORE_THREAD_TERMINATION_MS) {
 				logger.warn("Timeout waiting for all outstanding CDI events to be acknowledged");
 				break;
 			}
@@ -544,8 +504,7 @@ public class RabbitMQProducerController {
 			} catch (InterruptedException e) {
 			}
 
-			//TODO Make this 30000 ms a configurable parameter or a final static variable
-			if (loopTime >= 30000) {
+			if (loopTime >= MAX_WAIT_BEFORE_THREAD_TERMINATION_MS) {
 				logger.warn("Timeout waiting for all message handlers to finish processing their incoming messages");
 				break;
 			}
@@ -602,8 +561,7 @@ public class RabbitMQProducerController {
 			} catch (InterruptedException e) {
 			}
 
-			//TODO Make this 30000 ms a configurable parameter or a final static variable
-			if (loopTime >= 30000) {
+			if (loopTime >= MAX_WAIT_BEFORE_THREAD_TERMINATION_MS) {
 				logger.warn("Timeout waiting for producerMsgQueue to empty");
 				break;
 			}
@@ -632,8 +590,9 @@ public class RabbitMQProducerController {
 				RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
 				logger.info("Waiting for RabbitMQ producer thread to terminate...");
 				try {
-					//TODO Make this 30000 ms a configurable parameter or a final static variable
-					rabbitMQProducerThread.join(30000);	// Wait maximum 30 seconds
+					rabbitMQProducerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ producer thread terminated or timed out after {} ms",
+							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
 				} catch (InterruptedException e) {
 				}
 			}
@@ -644,8 +603,53 @@ public class RabbitMQProducerController {
 					RabbitMQProducerController.state = RabbitMQProducerControllerStates.STOPPED;	// call repeatedly, just in case
 					logger.info("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
 					try {
-						//TODO Make this 30000 ms a configurable parameter or a final static variable
-						rabbitMQProducerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+						rabbitMQProducerThreads.get(threadIndex).join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ producer thread {} terminated or timed out after {} ms", threadIndex,
+								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					} catch (InterruptedException e) {
+					}
+				}
+			}
+		}
+
+		logger.info("Done");
+	}
+
+	/**
+	 * Stops the RabbitMQconsumer thread(s) and then wait for it(them) to 
+	 * terminate.
+	 */
+	//TODO Consider eliminating this method and replace the call above to it 
+	//     with a call to RabbitMQConsumerController.stopConsumerThreadsAndWaitForTermination
+	//     since they are essentially the same. Remember that the RabbitMQConsumerController
+	//     bean will be unavailable and its heartBeat() method will not run while that method
+	//     executes here. So test carefully before committing this change.
+	@Lock(LockType.WRITE)
+	public void stopConsumerThreadsAndWaitForTermination() {
+
+		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
+			if (RabbitMQConsumerController.rabbitMQConsumerThread != null
+					&& RabbitMQConsumerController.rabbitMQConsumerThread.isAlive()) {
+				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
+				logger.info("Waiting for RabbitMQ consumer thread to terminate...");
+				try {
+					RabbitMQConsumerController.rabbitMQConsumerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ consumer thread terminated or timed out after {} ms",
+							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+				} catch (InterruptedException e) {
+				}
+			}
+		} else {
+			for (int threadIndex = 0; threadIndex < RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS; threadIndex++) {
+				if (RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex) != null
+						&& RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).isAlive()) {
+					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
+					logger.info("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
+					try {
+						RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).join(
+								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ consumer thread {} terminated or timed out after {} ms", threadIndex,
+								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
 					} catch (InterruptedException e) {
 					}
 				}

@@ -16,6 +16,7 @@ import com.google.protobuf.ByteString;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
@@ -88,6 +89,15 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				byte[] passageBytes = passage.build().toByteArray();
 
 				/*
+				 * Package both the RabbitMQMsgAck that is associated with the
+				 * original consumed RabbitMQ message (containing its delivery
+				 * tag and other details) and the outgoing serialized protobuf
+				 * message in a single object that can be placed in the producer
+				 * message blocking queue.
+				 */
+				//TODO The RabbitMQMsgEnvelope class is quite general. Consider reusing it elsewhere.
+				RabbitMQMsgEnvelope rabbitMQMsgEnvelope = new RabbitMQMsgEnvelope(rabbitMQMsgAck, passageBytes);
+				/*
 				 * Queue the message for publishing to a RabbitMQ broker. The 
 				 * actual publishing will be performed in a RabbitMQ producer 
 				 * background thread.
@@ -96,11 +106,8 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				/*
 				 * Remember that success here only means that the message was queued for
 				 * delivery, not that is *was* delivered!
-				 * TODO Should we try to follow up that the message *was* delivered successfully?
-				 * If so, what should be done in that case?
 				 */
-				//				boolean success = false;
-				boolean success = this.send(passageBytes);
+				boolean success = this.send(rabbitMQMsgEnvelope);
 				if (success) {
 					logger.debug("Message successfully queued.");
 				} else {
@@ -133,7 +140,7 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 
 	}
 
-	public boolean send(byte[] bytes) {
+	public boolean send(RabbitMQMsgEnvelope rabbitMQMsgEnvelope) {
 
 		logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
 				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
@@ -156,14 +163,22 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 * returned and the sender must deal with the failure.
 		 * 
 		 * TODO Staying in this loop forever is not good. Implement a better algorithm.
+		 *      After I implement ackAlgorithm = AckAlgorithms.AFTER_SENT, then I can 
+		 *      just remove this "while" loop and also remove the timeout
+		 *      PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS. Instead, just let the offer just
+		 *      fail immediately and treat this by setting the appropriate attributes
+		 *      of the RabbitMQMsgAck so that the message will be nacked, and then
+		 *      place that RabbitMQMsgAck object in the acknowledgement queue (or
+		 *      let that be done in the calling code).
 		 */
-		logger.debug("Offering a message to the producer blocking queue [{} bytes]...", bytes.length);
+		logger.debug("Offering a message to the producer blocking queue [{} bytes]...",
+				rabbitMQMsgEnvelope.getMessage().length);
 		boolean success = false;
 		while (!success) {
 			try {
-				//TODO How long should we block here? We need to think through this behaviour carefully.
 				//			success = RabbitMQProducerController.producerMsgQueue.offer(bytes);
-				success = RabbitMQProducerController.producerMsgQueue.offer(bytes, PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS,
+				success = RabbitMQProducerController.producerMsgQueue.offer(rabbitMQMsgEnvelope,
+						PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS,
 						TimeUnit.MILLISECONDS);
 
 				logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}, success={}",
@@ -174,8 +189,7 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 						new Boolean(success)
 						);
 
-				//TODO "PUBLISHER CONFIRMS" !!!!!!!!!
-
+				//TODO If I remove the timeout on the "offer(...)" above, then I can delete this catch block. Sweet.
 			} catch (InterruptedException e) {
 				//TODO Can we ensure that the message to be queued, i.e., "bytes", is not lost?
 				logger.warn("\n********************" +
@@ -185,20 +199,6 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 						"\nor the RabbitMQ producer thread(s)?" +
 						"\nCan we ensure that the message to be queued is not lost?" +
 						"\n********************");
-			}
-			if (success) {
-				logger.debug("Message successfully entered into producer blocking queue.");
-			} else {
-				/*
-				 * Either the queue is full, or an interrupt was received while
-				 * waiting to publish the message. 
-				 */
-				//TODO Ensure that a "nack/reject" is sent back to the RabbitMQ broker. Then the message should *not* be lost.
-				logger.warn("\n**********\nMessage not entered into producer blocking queue!\n**********");
-
-				logger.info("RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
-						RabbitMQProducerController.producerMsgQueue.remainingCapacity());
-				logger.info("RabbitMQConsumerRunnable.throttled = {}", RabbitMQConsumerRunnable.throttled);
 			}
 		}
 		return success;
