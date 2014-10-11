@@ -1,10 +1,19 @@
 package com.qfree.obotest.rabbitmq;
 
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 
 public class RabbitMQMsgAck {
 
 	private UUID consumerThreadUUID;
+	/*
+	 * This is the queue into which a RabbitMQMsgAck object should be inserted
+	 * if we are in "acknowledge after send" mode. There is one such queue for
+	 * each RabbitMQ consumer thread. This attribute is necessary so that the
+	 * the message is acked/nacked on the RabbitMQ channel (consumer thread) on
+	 * which the message was originally consumed.
+	 */
+	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
 	private long deliveryTag;
 	/**
 	 * If false, the message will be acked.
@@ -21,9 +30,10 @@ public class RabbitMQMsgAck {
 	 */
 	private boolean requeueRejectedMsg = true;
 
-	public RabbitMQMsgAck(UUID consumerThreadUUID, long deliveryTag) {
+	public RabbitMQMsgAck(UUID consumerThreadUUID, BlockingQueue<RabbitMQMsgAck> acknowledgementQueue, long deliveryTag) {
 		super();
 		this.consumerThreadUUID = consumerThreadUUID;
+		this.acknowledgementQueue = acknowledgementQueue;
 		this.deliveryTag = deliveryTag;
 	}
 
@@ -33,6 +43,14 @@ public class RabbitMQMsgAck {
 
 	public void setConsumerThreadUUID(UUID consumerThreadUUID) {
 		this.consumerThreadUUID = consumerThreadUUID;
+	}
+
+	public BlockingQueue<RabbitMQMsgAck> getAcknowledgementQueue() {
+		return acknowledgementQueue;
+	}
+
+	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		this.acknowledgementQueue = acknowledgementQueue;
 	}
 
 	public long getDeliveryTag() {

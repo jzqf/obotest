@@ -2,6 +2,7 @@ package com.qfree.obotest.rabbitmq.consume.imagetest;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 
 import javax.ejb.Asynchronous;
 import javax.ejb.Lock;
@@ -62,6 +63,13 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 	Channel channel = null;
 	QueueingConsumer consumer = null;
 
+	/*
+	 * This queue holds the RabbitMQ delivery tags and other details for 
+	 * messages that are processed in other threads but which must be 
+	 * acked/nacked in this consumer thread.
+	 */
+	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
+
     @Inject
 	@ImageQualifier
 	Event<ImageEvent> imageEvent;
@@ -74,6 +82,10 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		 * were done, this field will contain the name of this class, of course.
 		 */
 		this.subClassName = this.getClass().getSimpleName();
+	}
+
+	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		this.acknowledgementQueue = acknowledgementQueue;
 	}
 
 	public void registerConsumerThreadUUID(UUID consumerThreadUUID) {

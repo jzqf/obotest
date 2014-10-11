@@ -2,6 +2,7 @@ package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
 import javax.ejb.Lock;
@@ -20,6 +21,8 @@ import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
+import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -73,6 +76,13 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private Channel channel = null;
 	private QueueingConsumer consumer = null;
 
+	/*
+	 * This queue holds the RabbitMQ delivery tags and other details for 
+	 * messages that are processed in other threads but which must be 
+	 * acked/nacked in this consumer thread.
+	 */
+	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
+
     @Inject
 	@PassageQualifier
 	Event<PassageTest1Event> passageEvent;
@@ -85,6 +95,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		 * were done, this field will contain the name of this class, of course.
 		 */
 		this.subClassName = this.getClass().getSimpleName();
+	}
+
+	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		this.acknowledgementQueue = acknowledgementQueue;
 	}
 
 	public void registerConsumerThreadUUID(UUID consumerThreadUUID) {
@@ -139,12 +153,20 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 			long deliveryTag = delivery.getEnvelope().getDeliveryTag();
 
-			//			logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
-			//					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
-			//					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-			//					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-			//					new Boolean(RabbitMQConsumerRunnable.throttled)
-			//					);
+			logger.debug(
+					"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
+					RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+							- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+									.availablePermits(),
+					RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+							RabbitMQConsumerController.messageHandlerCounterSemaphore
+									.availablePermits(),
+					RabbitMQProducerController.producerMsgQueue.size(),
+					RabbitMQConsumerController.acknowledgementQueue.size(),
+					new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
+					new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
+					new Boolean(RabbitMQConsumerRunnable.throttled)
+					);
 
 			byte[] passageBytes = delivery.getBody();
 
@@ -186,6 +208,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			}
 
 		} else {
+			logger.info("********** NO MESSAGE **********"); //TODO DELETEME
 			/*
 			 * This just means that there were no messages to consume after
 			 * waiting the timeout period. This in perfectly normal. The 
@@ -244,7 +267,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	@Lock(LockType.WRITE)
 	private void firePassageEvent(byte[] passageBytes, long deliveryTag) {
 
-		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(consumerThreadUUID, deliveryTag);
+		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(consumerThreadUUID, acknowledgementQueue, deliveryTag);
 
 		try {
 
@@ -257,7 +280,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			passagePayload.setImageName(filename);
 			passagePayload.setImageBytes(imageBytes);
 			
-			logger.debug("consumerThreadUUID = {}, deliveryTag = {}", consumerThreadUUID, deliveryTag);
+			logger.info("consumerThreadUUID = {}, deliveryTag = {}", consumerThreadUUID, deliveryTag);
 
 			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
 				logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName, passagePayload,

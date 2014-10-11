@@ -94,7 +94,7 @@ public class RabbitMQConsumerController {
 		AFTER_RECEIVED, AFTER_SENT
 	};
 
-	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_RECEIVED;
+	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_SENT;
 
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
@@ -163,7 +163,7 @@ public class RabbitMQConsumerController {
 	 * consumer thread is busy acknowledging messages from the acknowledgement
 	 * (blocking) queue. This is semaphore is only needed when there is more
 	 * than a single consumer thread running. In particular, it enables code to
-	 * ensure that _another_ consumer thread is not processig the 
+	 * ensure that _another_ consumer thread is not processing the 
 	 * acknowledgement queue (removing all elements and then returning those
 	 * elements to the queue that are for another thread), and therefore it is 
 	 * OK to test if the queue is empty or not.
@@ -181,7 +181,17 @@ public class RabbitMQConsumerController {
 	 * acked/nacked in the consumer threads.
 	 */
 	public static final BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
-			ACKNOWLEDGEMENT_QUEUE_LENGTH);
+			ACKNOWLEDGEMENT_QUEUE_LENGTH);  /// TODO ELIMINATE?
+
+	//	/*
+	//	 * This is used to map the UUID for a consumer thread to the acknowledgement
+	//	 * queue for that thread. This is used so that message handlers and producer
+	//	 * threads can offer their RabbitMQMsgAck object to the correct 
+	//	 * acknowledgement queue (the acknowledgement queue that corresponds to the
+	//	 * consumer thread that consumed the original message).
+	//	 */
+	//	public static final Map<UUID, BlockingQueue<RabbitMQMsgAck>> acknowledgementQueueMap = new ConcurrentHashMap<>(
+	//			NUM_RABBITMQ_CONSUMER_THREADS);
 
 	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 

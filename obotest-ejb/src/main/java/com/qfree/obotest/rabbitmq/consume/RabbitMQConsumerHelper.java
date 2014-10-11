@@ -2,13 +2,14 @@ package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 
 public interface RabbitMQConsumerHelper {
 
-	public void registerConsumerThreadUUID(UUID consumerThreadUUID);
+	public void registerConsumerThreadUUID(UUID consumerThreadUUID);  // Eliminate
 
 	public void openConnection() throws IOException;
 
@@ -17,6 +18,8 @@ public interface RabbitMQConsumerHelper {
 	public void openChannel() throws IOException;
 
 	public void closeChannel() throws IOException;
+
+	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue);
 
 	public void configureConsumer() throws IOException;
 

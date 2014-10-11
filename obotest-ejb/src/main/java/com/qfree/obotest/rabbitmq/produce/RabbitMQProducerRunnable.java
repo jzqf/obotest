@@ -91,9 +91,9 @@ public class RabbitMQProducerRunnable implements Runnable {
 							break;
 						} catch (IOException e) {
 							/*
-							 * TODO Catch this exception in handlePublish()? At any rate, the oroginal consumed
-							 *      message should probably be acked/rejected/dead-lettered, either there or here.
-							 */
+						 * TODO Catch this exception in handlePublish()? At any rate, the original consumed
+						 *      message should probably be acked/rejected/dead-lettered, either there or here.
+						 */
 							logger.error("IOException received.", e);
 						} catch (Throwable e) {
 							// I'm not sure if/when this will occur.

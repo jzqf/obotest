@@ -1,6 +1,7 @@
 package com.qfree.obotest.rabbitmq.produce.passagetest1;
 
 import java.io.IOException;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
@@ -134,11 +135,6 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				RabbitMQProducerController.producerMsgQueue.remainingCapacity()
 				);
 
-		logger.trace("[{}]: producerMsgQueue.size() = {}", subClassName,
-				RabbitMQProducerController.producerMsgQueue.size());
-		logger.trace("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}", subClassName,
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity());
-
 		RabbitMQMsgEnvelope rabbitMQMsgEnvelope = RabbitMQProducerController.producerMsgQueue.poll(
 				RABBITMQ_PRODUCER_TIMEOUT_MS,
 				TimeUnit.MILLISECONDS);
@@ -154,15 +150,7 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			byte[] passageBytes = rabbitMQMsgEnvelope.getMessage();
 			RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
 
-			//			logger.info("consumerThreadUUID = {}, deliveryTag = {}", rabbitMQMsgAck.getConsumerThreadUUID(),
-			//					rabbitMQMsgAck.getDeliveryTag());
-
-			//			logger.debug("q={} - After poll: Element removed: {} bytes",
-			//					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-			//					passageBytes.length
-			//					);
-
-			logger.debug("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
+			logger.info("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
 					passageBytes.length);
 
 			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
@@ -181,26 +169,76 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 
 			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
 
-				//TODO Log a warning if the acknowledgement queue is over 90% full
-				//     If this happens include a message that the queue size should be increased.
+				//NEW:
+				/*
+				 * Get the queue into which the rabbitMQMsgAck should be 
+				 * inserted. This is the queue that is managed by the  thread 
+				 * that consumed the original message that was processed by this
+				 * thread (all messages must be acknowledged on the same 
+				 * RabbitMQ channel on which the message was originally 
+				 * consumed).
+				 */
+				BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = rabbitMQMsgAck.getAcknowledgementQueue();
 
 				/*
-				 * this will tell the appropriate consumer thread to acknowledge
-				 * the original message that it consumed earlier.
+				 * This will tell the consumer thread that processes this 
+				 * RabbitMQMsgAck object to acknowledge the original message 
+				 * that it consumed earlier.
 				 */
 				rabbitMQMsgAck.setRejected(false);
 				/*
-				 * Place the RabbitMQMsgAck object in the acknowledgement queue so
-				 * that the consumer threads can acknowledge the original message
-				 * that was consumed and processed to create the message just 
-				 * published above.
+				 * Log a warning if the acknowledgement queue is over 90% full.
 				 */
-				if (RabbitMQConsumerController.acknowledgementQueue.offer(rabbitMQMsgAck)) {
-					//TODO write toString() method for the RabbitMQMsgAck class
-					logger.info("RabbitMQMsgAck object offered to acknowledgment queue: {}", rabbitMQMsgAck);
-				} else {
-					logger.warn("Acknwledgement queue is full. Meesage will be requeued when consumer threads are restarted.");
+				if (acknowledgementQueue.size() > 0.9 * RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH) {
+					logger.warn("Acknowledgement queue is over 90% full. Current size = {}."
+							+ " It may be necessary to increase the maximum capacity.",
+							acknowledgementQueue.size());
 				}
+				/*
+				 * Place the RabbitMQMsgAck object in the acknowledgement queue.
+				 */
+				logger.info("NEW Acknowledgment queue size before offer = {}",
+						acknowledgementQueue.size());	//TODO DELETE THIS!!!!!!!!!!!!!!!!!!!!
+				if (acknowledgementQueue.offer(rabbitMQMsgAck)) {
+					logger.info("RabbitMQMsgAck object offered to NEW acknowledgment queue: {}. Queue size = {}",
+							rabbitMQMsgAck, acknowledgementQueue.size());  //TODO Remove NEW
+				} else {
+					logger.warn("Acknowledgement queue is full."
+							+ " Message will be requeued when consumer threads are restarted.");
+				}
+
+				//TODO OLD (DELETE):
+				/*
+				 * Log a warning if the acknowledgement queue is over 90% full.
+				 */
+				if (RabbitMQConsumerController.acknowledgementQueue.size() > 0.9 * RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH) {
+					logger.warn("Acknowledgement queue is over 90% full. Current size = {}."
+							+ " It may be necessary to increase the maximum capacity.",
+							RabbitMQConsumerController.acknowledgementQueue.size());
+				}
+
+				/*
+				 * This will tell the consumer thread that processes this 
+				 * RabbitMQMsgAck object to acknowledge the original message 
+				 * that it consumed earlier.
+				 */
+				rabbitMQMsgAck.setRejected(false);
+				/*
+				 * Place the RabbitMQMsgAck object in the acknowledgement queue 
+				 * so that the appropriate consumer thread can acknowledge the 
+				 * original message that was consumed earlier and then processed
+				 * to create the message just published above.
+				 */
+				logger.info("Acknowledgment queue size before offer = {}",
+						RabbitMQConsumerController.acknowledgementQueue.size());	//TODO DELETE THIS!!!!!!!!!!!!!!!!!!!!
+				if (RabbitMQConsumerController.acknowledgementQueue.offer(rabbitMQMsgAck)) {
+					logger.info("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
+							rabbitMQMsgAck, RabbitMQConsumerController.acknowledgementQueue.size());
+				} else {
+					logger.warn("Acknwledgement queue is full."
+							+ " Message will be requeued when consumer threads are restarted.");
+				}
+
 			}
 
 		} else {
@@ -212,8 +250,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			 * terminate or whatever, even if this thread is not 
 			 * interrupted. 
 			 */
-			logger.trace("q={} - After poll: No message.",
-					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
+			//			logger.trace("q={} - After poll: No message.",
+			//					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
 		}
 	}
 

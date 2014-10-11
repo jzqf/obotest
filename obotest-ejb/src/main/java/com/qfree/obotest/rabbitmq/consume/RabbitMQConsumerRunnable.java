@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,8 +132,25 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				messageConsumerHelper.openChannel();
 				try {
 
+					/*
+					 * This queue holds the RabbitMQ delivery tags and other details for 
+					 * messages that are processed in other threads but which must be 
+					 * acked/nacked in this consumer thread. A new queue is created each
+					 * time a channel is openned because the delivery tags that are used
+					 * to ack/nack the consumed messages are specific to the channel 
+					 * used to consume the original messages.
+					 */
+					BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
+							RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH);
+
+					messageConsumerHelper.setAcknowledgementQueue(acknowledgementQueue);
+
 					messageConsumerHelper.configureConsumer();
 					logger.info("Waiting for messages...");
+
+					// These are for testing only. Delete after things work OK.
+					final long NUM_MSGS_TO_CONSUME = 20;
+					long msgs_consumed = 0;
 
 					while (true) {
 
@@ -175,7 +194,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							*	PQ:  number of elements in the producer message queue
 							*	AQ:  number of elements in the acknowledgement queue
 							 */
-							logger.info(
+							logger.debug(
 									"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
 									numUnacknowledgeCDIEvents,
 									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
@@ -190,45 +209,57 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 							if (!throttled) {
 
-								try {
-									messageConsumerHelper.handleNextDelivery();
-								} catch (InterruptedException e) {
-									logger.warn("InterruptedException received.");
-								} catch (InvalidProtocolBufferException e) {
-									/*
-									 * TODO Catch this exception in handleNextDelivery()? At any rate, the consumed
-									 *      message should probably be rejected/dead-lettered, either there or here.
-									 */
-									logger.error("InvalidProtocolBufferException received.", e);
-								} catch (IOException e) {
-									/*
-									 * TODO Catch this exception in handleNextDelivery()? At any rate, the consumed
-									 *      message should probably be rejected/dead-lettered, either there or here.
-									 */
-									logger.error("IOException received.", e);
-								} catch (ShutdownSignalException e) {
-									// I'm not sure if/when this will occur.
-									logger.info(
-											"ShutdownSignalException received. The RabbitMQ connection will close.", e);
-									break;
-								} catch (ConsumerCancelledException e) {
-									// I'm not sure if/when this will occur.
-									logger.info(
-											"ConsumerCancelledException received. The RabbitMQ connection will close.",
-											e);
-									break;
-								} catch (Throwable e) {
-									// I'm not sure if/when this will occur.
-									// We log the exception, but do not terminate this thread.
-									logger.error("Unexpected exception caught.", e);
-								}
+								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
+									msgs_consumed += 1;
+									logger.info("\n\nAbout to consume message...\n\n");
+
+									try {
+										messageConsumerHelper.handleNextDelivery();
+									} catch (InterruptedException e) {
+										logger.warn("InterruptedException received.");
+									} catch (InvalidProtocolBufferException e) {
+										/*
+										 * TODO Catch this exception in handleNextDelivery()? At any rate, the consumed
+										 *      message should probably be rejected/dead-lettered, either there or here.
+										 */
+										logger.error("InvalidProtocolBufferException received.", e);
+									} catch (IOException e) {
+										/*
+										 * TODO Catch this exception in handleNextDelivery()? At any rate, the consumed
+										 *      message should probably be rejected/dead-lettered, either there or here.
+										 */
+										logger.error("IOException received.", e);
+									} catch (ShutdownSignalException e) {
+										// I'm not sure if/when this will occur.
+										logger.info(
+												"ShutdownSignalException received. The RabbitMQ connection will close.",
+												e);
+										break;
+									} catch (ConsumerCancelledException e) {
+										// I'm not sure if/when this will occur.
+										logger.info(
+												"ConsumerCancelledException received. The RabbitMQ connection will close.",
+												e);
+										break;
+									} catch (Throwable e) {
+										// I'm not sure if/when this will occur.
+										// We log the exception, but do not terminate this thread.
+										logger.error("Unexpected exception caught.", e);
+									}
+
+								} else {
+									try {
+										Thread.sleep(LONG_SLEEP_MS);
+									} catch (InterruptedException e) {
+									}
+								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
 
 							}
 						}
 
 						int numAcknowledgementsinQueue = 0;
 						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
-							numAcknowledgementsinQueue = acknowledgeMsgsInQueue();
+							numAcknowledgementsinQueue = acknowledgeMsgsInQueue(acknowledgementQueue);
 						} else {
 							numAcknowledgementsinQueue = 0;
 						}
@@ -297,11 +328,29 @@ public class RabbitMQConsumerRunnable implements Runnable {
 		logger.info("Thread exiting");
 	}
 
-	private int acknowledgeMsgsInQueue() {
+	private int acknowledgeMsgsInQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		
 		/*
-		 * Only attempt process the acknowledgement queue if it appears to
-		 * contain elements. 
+		 * Process the elements in the acknowledgement queue for this thread.
 		 */
+		logger.info("Processing {} elements from the NEW THREAD-SPECIFIC acknowledgement queue...",
+				acknowledgementQueue.size());
+		while (acknowledgementQueue.size() > 0) {
+			RabbitMQMsgAck rabbitMQMsgAck = acknowledgementQueue.poll();
+			if (rabbitMQMsgAck != null) {
+				logger.info("NEW THREAD-SPECIFIC acknowledgement queue. Delivery tag = {}",
+						rabbitMQMsgAck.getDeliveryTag());
+				//TODO Uncomment these lines!!!!!!!!!!:
+				//				try {
+				//					messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
+				//				} catch (IOException e) {
+				//					// This is very unlikely.
+				//					logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
+				//				}
+			}
+		}
+
+		//OLD (DELETE):
 		int numAcknowledgementsinQueue = RabbitMQConsumerController.acknowledgementQueue.size();
 		if (numAcknowledgementsinQueue > 0) {
 			/*
