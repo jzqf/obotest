@@ -150,8 +150,9 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			byte[] passageBytes = rabbitMQMsgEnvelope.getMessage();
 			RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
 
-			logger.info("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
-					passageBytes.length);
+			logger.debug("Publishing RabbitMQ passage message [{} bytes]...", passageBytes.length);
+			//			logger.info("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
+			//					passageBytes.length);
 
 			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
@@ -186,7 +187,7 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				 * Place the RabbitMQMsgAck object in the acknowledgement queue.
 				 */
 				if (acknowledgementQueue.offer(rabbitMQMsgAck)) {
-					logger.info("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
+					logger.debug("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
 							rabbitMQMsgAck, acknowledgementQueue.size());
 				} else {
 					logger.warn("Acknowledgement queue is full."

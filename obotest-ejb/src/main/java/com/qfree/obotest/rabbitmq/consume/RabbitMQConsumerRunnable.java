@@ -173,7 +173,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							*	PQ:  number of elements in the producer message queue
 							*	AQ:  number of elements in the acknowledgement queue
 							 */
-							logger.debug(
+							logger.info(
 									"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
 									numUnacknowledgeCDIEvents,
 									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
@@ -311,12 +311,12 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 */
 	private void acknowledgeMsgsInQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		if (acknowledgementQueue.size() > 0) {
-			logger.info("Processing {} elements from the acknowledgement queue...", acknowledgementQueue.size());
+			logger.debug("Processing {} elements from the acknowledgement queue...", acknowledgementQueue.size());
 			RabbitMQMsgAck rabbitMQMsgAck = acknowledgementQueue.poll();
 			while (rabbitMQMsgAck != null) {
-				logger.info("Delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
+				logger.debug("Delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
 				try {
-					logger.info("Acknowledging message with delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());//TODO delete this line
+					logger.debug("Acknowledging message with delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());//TODO delete this line
 					messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
 				} catch (IOException e) {
 					// This is very unlikely.
@@ -356,7 +356,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			sleepMs = 0;
 		}
 		if (sleepMs > 0) {
-			logger.info("Sleeping for {} ms", sleepMs);
+			logger.debug("Sleeping for {} ms", sleepMs);
 			try {
 				Thread.sleep(sleepMs);
 			} catch (InterruptedException e) {

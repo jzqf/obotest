@@ -122,7 +122,28 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
-		channel.basicQos(10);
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+			/*
+			 * Since an acknowledgement for a consumed message cannot be sent 
+			 * until the message is fully processed *and* the outgoing message 
+			 * is published, the channel must be configured to receive several 
+			 * 5-10? messages before it sends an acknowledgment for an earlier
+			 * consumed message. Simple testing seemed to indicate that setting
+			 * this to 3-4 worked reasonably OK, but just to be sure I will use
+			 * a larger value here. 
+			 * 
+			 * A value of 1 here means that the message must be acknowledged 
+			 * before it will receive another from the RabbitMQ broker on this
+			 * channel.
+			 * 
+			 * TODO This parameter should be tuned for the types of messages used
+			 *      in production, as well as the amount of processing done on
+			 *      each message.
+			 */
+			channel.basicQos(10);
+		} else {
+			channel.basicQos(1);
+		}
 	}
 
 	public void closeChannel() throws IOException {
@@ -191,6 +212,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 * timeout is implemented so that the calling thread can check 
 			 * whether there has been a request made for it to terminate or 
 			 * whatever, even if this thread is not interrupted. 
+			 * 
+			 * IMPORTANT:  If this message appears a lot, it may be necessary
+			 *             to increase the "prefetch count" specified with
+			 *             Channel.basicQos(...).
 			 */
 		}
 	}
@@ -203,14 +228,14 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) throws IOException {
 		if (!rabbitMQMsgAck.isRejected()) {
 			// Acknowledge the message, and only this message.
-			logger.info("Acking message: {}", rabbitMQMsgAck);
+			logger.debug("Acking message: {}", rabbitMQMsgAck);
 			channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
 		} else {
 			/*
 			 * Reject the message, and request that it be requeued or not 
 			 * according to the value of rabbitMQMsgAck.isRequeueRejectedMsg().
 			 */
-			logger.info("Nacking message: {}", rabbitMQMsgAck);
+			logger.debug("Nacking message: {}", rabbitMQMsgAck);
 			channel.basicNack(rabbitMQMsgAck.getDeliveryTag(), false, rabbitMQMsgAck.isRequeueRejectedMsg());
 		}
 	}

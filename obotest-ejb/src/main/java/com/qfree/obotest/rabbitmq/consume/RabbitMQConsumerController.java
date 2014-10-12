@@ -292,7 +292,7 @@ public class RabbitMQConsumerController {
 	 */
 	@Lock(LockType.WRITE)
 	public void disable() {
-		logger.info("Request received to enable RabbitMQ consumer thread(s)");
+		logger.info("Request received to disable RabbitMQ consumer thread(s)");
 		/*
 		 * We only "disable" the consumer threads if they are currently running;
 		 * If, instead, the threads are currently stopped, setting the state to
