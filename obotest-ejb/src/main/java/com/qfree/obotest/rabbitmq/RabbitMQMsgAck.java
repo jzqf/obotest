@@ -1,11 +1,9 @@
 package com.qfree.obotest.rabbitmq;
 
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 
 public class RabbitMQMsgAck {
 
-	private UUID consumerThreadUUID;
 	/*
 	 * This is the queue into which a RabbitMQMsgAck object should be inserted
 	 * if we are in "acknowledge after send" mode. There is one such queue for
@@ -30,19 +28,10 @@ public class RabbitMQMsgAck {
 	 */
 	private boolean requeueRejectedMsg = true;
 
-	public RabbitMQMsgAck(UUID consumerThreadUUID, BlockingQueue<RabbitMQMsgAck> acknowledgementQueue, long deliveryTag) {
+	public RabbitMQMsgAck(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue, long deliveryTag) {
 		super();
-		this.consumerThreadUUID = consumerThreadUUID;
 		this.acknowledgementQueue = acknowledgementQueue;
 		this.deliveryTag = deliveryTag;
-	}
-
-	public UUID getConsumerThreadUUID() {
-		return consumerThreadUUID;
-	}
-
-	public void setConsumerThreadUUID(UUID consumerThreadUUID) {
-		this.consumerThreadUUID = consumerThreadUUID;
 	}
 
 	public BlockingQueue<RabbitMQMsgAck> getAcknowledgementQueue() {
@@ -79,7 +68,7 @@ public class RabbitMQMsgAck {
 
 	@Override
 	public String toString() {
-		return "RabbitMQMsgAck [consumerThreadUUID=" + consumerThreadUUID + ", deliveryTag=" + deliveryTag
+		return "RabbitMQMsgAck [deliveryTag=" + deliveryTag
 				+ ", rejected=" + rejected + ", requeueRejectedMsg=" + requeueRejectedMsg + "]";
 	}
 

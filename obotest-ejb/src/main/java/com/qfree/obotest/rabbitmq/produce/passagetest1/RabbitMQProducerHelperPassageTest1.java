@@ -156,20 +156,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
 
-			//			logger.debug("[{}]: Published RabbitMQ passage message", subClassName);
-
-			//			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.size() = {}", subClassName,
-			//					RabbitMQProducerController.producerMsgQueue.size());
-			//			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
-			//					subClassName,
-			//					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
-
-			//				logger.debug("[{}]: Sleeping for 2000 ms...", subClassName);
-			//				Thread.sleep(2000);
-
 			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
 
-				//NEW:
 				/*
 				 * Get the queue into which the rabbitMQMsgAck should be 
 				 * inserted. This is the queue that is managed by the  thread 
@@ -197,45 +185,11 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 				/*
 				 * Place the RabbitMQMsgAck object in the acknowledgement queue.
 				 */
-				logger.info("NEW Acknowledgment queue size before offer = {}",
-						acknowledgementQueue.size());	//TODO DELETE THIS!!!!!!!!!!!!!!!!!!!!
 				if (acknowledgementQueue.offer(rabbitMQMsgAck)) {
-					logger.info("RabbitMQMsgAck object offered to NEW acknowledgment queue: {}. Queue size = {}",
-							rabbitMQMsgAck, acknowledgementQueue.size());  //TODO Remove NEW
+					logger.info("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
+							rabbitMQMsgAck, acknowledgementQueue.size());
 				} else {
 					logger.warn("Acknowledgement queue is full."
-							+ " Message will be requeued when consumer threads are restarted.");
-				}
-
-				//TODO OLD (DELETE):
-				/*
-				 * Log a warning if the acknowledgement queue is over 90% full.
-				 */
-				if (RabbitMQConsumerController.acknowledgementQueue.size() > 0.9 * RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH) {
-					logger.warn("Acknowledgement queue is over 90% full. Current size = {}."
-							+ " It may be necessary to increase the maximum capacity.",
-							RabbitMQConsumerController.acknowledgementQueue.size());
-				}
-
-				/*
-				 * This will tell the consumer thread that processes this 
-				 * RabbitMQMsgAck object to acknowledge the original message 
-				 * that it consumed earlier.
-				 */
-				rabbitMQMsgAck.setRejected(false);
-				/*
-				 * Place the RabbitMQMsgAck object in the acknowledgement queue 
-				 * so that the appropriate consumer thread can acknowledge the 
-				 * original message that was consumed earlier and then processed
-				 * to create the message just published above.
-				 */
-				logger.info("Acknowledgment queue size before offer = {}",
-						RabbitMQConsumerController.acknowledgementQueue.size());	//TODO DELETE THIS!!!!!!!!!!!!!!!!!!!!
-				if (RabbitMQConsumerController.acknowledgementQueue.offer(rabbitMQMsgAck)) {
-					logger.info("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
-							rabbitMQMsgAck, RabbitMQConsumerController.acknowledgementQueue.size());
-				} else {
-					logger.warn("Acknwledgement queue is full."
 							+ " Message will be requeued when consumer threads are restarted.");
 				}
 

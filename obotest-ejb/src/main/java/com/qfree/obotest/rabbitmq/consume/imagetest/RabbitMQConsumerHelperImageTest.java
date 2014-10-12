@@ -1,7 +1,6 @@
 package com.qfree.obotest.rabbitmq.consume.imagetest;
 
 import java.io.IOException;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 
 import javax.ejb.Asynchronous;
@@ -57,8 +56,6 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 	 */
 	String subClassName = null;
 
-	private UUID consumerThreadUUID = null;
-
 	Connection connection = null;
 	Channel channel = null;
 	QueueingConsumer consumer = null;
@@ -86,10 +83,6 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 
 	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		this.acknowledgementQueue = acknowledgementQueue;
-	}
-
-	public void registerConsumerThreadUUID(UUID consumerThreadUUID) {
-		this.consumerThreadUUID = consumerThreadUUID;
 	}
 
 	public void openConnection() throws IOException {

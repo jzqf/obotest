@@ -3,8 +3,6 @@ package com.qfree.obotest.rabbitmq.consume;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 
 import javax.annotation.PostConstruct;
@@ -31,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.HelperBean1;
 import com.qfree.obotest.rabbitmq.HelperBean2;
-import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.thread.DefaultUncaughtExceptionHandler;
 
 /*
@@ -157,41 +154,6 @@ public class RabbitMQConsumerController {
 	 * whenever the application is *re*deployed).
 	 */
 	public static final Semaphore messageHandlerCounterSemaphore = new Semaphore(MAX_MESSAGE_HANDLERS);
-
-	/*
-	 * This semaphore is used to enable a consumer threads to know if another
-	 * consumer thread is busy acknowledging messages from the acknowledgement
-	 * (blocking) queue. This is semaphore is only needed when there is more
-	 * than a single consumer thread running. In particular, it enables code to
-	 * ensure that _another_ consumer thread is not processing the 
-	 * acknowledgement queue (removing all elements and then returning those
-	 * elements to the queue that are for another thread), and therefore it is 
-	 * OK to test if the queue is empty or not.
-	 * 
-	 * Since we define the semaphore with the same number of permits as 
-	 * consumer threads, acquiring a permit should never block.
-	 */
-	public static final int MAX_ACK_QUEUE_PERMITS = NUM_RABBITMQ_CONSUMER_THREADS;
-	public static final Semaphore acknowledgementQueueBusyCounterSemaphore = new Semaphore(
-			MAX_ACK_QUEUE_PERMITS);
-
-	/*
-	 * This queue holds the RabbitMQ delivery tags and other details for 
-	 * messages that are processed in other threads but which must be 
-	 * acked/nacked in the consumer threads.
-	 */
-	public static final BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
-			ACKNOWLEDGEMENT_QUEUE_LENGTH);  /// TODO ELIMINATE?
-
-	//	/*
-	//	 * This is used to map the UUID for a consumer thread to the acknowledgement
-	//	 * queue for that thread. This is used so that message handlers and producer
-	//	 * threads can offer their RabbitMQMsgAck object to the correct 
-	//	 * acknowledgement queue (the acknowledgement queue that corresponds to the
-	//	 * consumer thread that consumed the original message).
-	//	 */
-	//	public static final Map<UUID, BlockingQueue<RabbitMQMsgAck>> acknowledgementQueueMap = new ConcurrentHashMap<>(
-	//			NUM_RABBITMQ_CONSUMER_THREADS);
 
 	public static volatile RabbitMQConsumerControllerStates state = RabbitMQConsumerControllerStates.STOPPED;
 

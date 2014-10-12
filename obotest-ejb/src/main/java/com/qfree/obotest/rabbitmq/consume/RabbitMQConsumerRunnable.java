@@ -1,9 +1,6 @@
 package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -56,7 +53,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * avoid getting stuck in an endless loop in the unlikely case that the
 	 * conditions being tested for are *never* satisfied.
 	 */
-	private static final long MAX_WAIT_BEFORE_TERMINATION_MS = 60000;  // 60s
+	private static final long MAX_WAIT_BEFORE_TERMINATION_MS =60000;  // 60s
 
 	/**
 	 * When true, message consumption will be disabled. This variable is set 
@@ -78,15 +75,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
 	 */
 	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
-
-	private final UUID uuid = UUID.randomUUID();
-
-	/**
-	 * This list is used to hold elements removed from the acknowledgement 
-	 * queue. Those elements that are meant for other consumer threads are 
-	 * placed back into the queue.
-	 */
-	private final List<RabbitMQMsgAck> acknowldegementQueueElements = new ArrayList<>();
 
 	private RabbitMQConsumerHelper messageConsumerHelper = null;
 
@@ -115,16 +103,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	@Override
 	public void run() {
 
-		logger.info("Starting RabbitMQ message consumer. UUID = {}...", uuid);
-
-		/*
-		 * Let the helper bean know the thread's UUID so that the helper can
-		 * record this in a RabbitMQMsgAck object which can then be packaged in
-		 * a CDI event together with the message data. It then 
-		 * fires this CDI event, which is received in the @Observes method of a
-		 * message handler.
-		 */
-		messageConsumerHelper.registerConsumerThreadUUID(uuid);
+		logger.info("Starting RabbitMQ message consumer");
 
 		try {
 			messageConsumerHelper.openConnection();
@@ -136,7 +115,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					 * This queue holds the RabbitMQ delivery tags and other details for 
 					 * messages that are processed in other threads but which must be 
 					 * acked/nacked in this consumer thread. A new queue is created each
-					 * time a channel is openned because the delivery tags that are used
+					 * time a channel is opened because the delivery tags that are used
 					 * to ack/nack the consumed messages are specific to the channel 
 					 * used to consume the original messages.
 					 */
@@ -148,9 +127,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					messageConsumerHelper.configureConsumer();
 					logger.info("Waiting for messages...");
 
-					// These are for testing only. Delete after things work OK.
-					final long NUM_MSGS_TO_CONSUME = 20;
-					long msgs_consumed = 0;
+					//					// These are for testing only. Delete after things work OK.
+					//					final long NUM_MSGS_TO_CONSUME = 100;
+					//					long msgs_consumed = 0;
 
 					while (true) {
 
@@ -201,7 +180,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 											RabbitMQConsumerController.messageHandlerCounterSemaphore
 													.availablePermits(),
 									RabbitMQProducerController.producerMsgQueue.size(),
-									RabbitMQConsumerController.acknowledgementQueue.size(),
+									acknowledgementQueue.size(),
 									new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
 									new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
 									new Boolean(RabbitMQConsumerRunnable.throttled)
@@ -209,9 +188,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 							if (!throttled) {
 
-								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
-									msgs_consumed += 1;
-									logger.info("\n\nAbout to consume message...\n\n");
+								//								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
+								//									msgs_consumed += 1;
+								//									logger.info("\n\nAbout to consume message...\n\n");
 
 									try {
 										messageConsumerHelper.handleNextDelivery();
@@ -247,31 +226,28 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										logger.error("Unexpected exception caught.", e);
 									}
 
-								} else {
-									try {
-										Thread.sleep(LONG_SLEEP_MS);
-									} catch (InterruptedException e) {
-									}
-								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
+								//								} else {
+								//									//									try {
+								//									//										Thread.sleep(LONG_SLEEP_MS);
+								//									//									} catch (InterruptedException e) {
+								//									//									}
+								//								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
 
 							}
 						}
 
-						int numAcknowledgementsinQueue = 0;
 						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
-							numAcknowledgementsinQueue = acknowledgeMsgsInQueue(acknowledgementQueue);
-						} else {
-							numAcknowledgementsinQueue = 0;
+							acknowledgeMsgsInQueue(acknowledgementQueue);
 						}
 
 						/*
 						 * Sleep for a short period, as appropriate. In normal operation
 						 * while we are consuming messages, we will not pause here at all.
 						 */
-						sleepALittleBit(throttled, numAcknowledgementsinQueue);
+						sleepALittleBit(throttled, acknowledgementQueue);
 
 						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
-							if (stoppingNowIsOK()) {
+							if (stoppingNowIsOK(acknowledgementQueue)) {
 								break;
 							}
 						} else {
@@ -328,106 +304,36 @@ public class RabbitMQConsumerRunnable implements Runnable {
 		logger.info("Thread exiting");
 	}
 
-	private int acknowledgeMsgsInQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
-		
-		/*
-		 * Process the elements in the acknowledgement queue for this thread.
-		 */
-		logger.info("Processing {} elements from the NEW THREAD-SPECIFIC acknowledgement queue...",
-				acknowledgementQueue.size());
-		while (acknowledgementQueue.size() > 0) {
+	/**
+	 * Processes the elements in the specified acknowledgement queue, if the
+	 * queue has any elements.
+	 * @param acknowledgementQueue
+	 */
+	private void acknowledgeMsgsInQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		if (acknowledgementQueue.size() > 0) {
+			logger.info("Processing {} elements from the acknowledgement queue...", acknowledgementQueue.size());
 			RabbitMQMsgAck rabbitMQMsgAck = acknowledgementQueue.poll();
-			if (rabbitMQMsgAck != null) {
-				logger.info("NEW THREAD-SPECIFIC acknowledgement queue. Delivery tag = {}",
-						rabbitMQMsgAck.getDeliveryTag());
-				//TODO Uncomment these lines!!!!!!!!!!:
-				//				try {
-				//					messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
-				//				} catch (IOException e) {
-				//					// This is very unlikely.
-				//					logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
-				//				}
+			while (rabbitMQMsgAck != null) {
+				logger.info("Delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
+				try {
+					logger.info("Acknowledging message with delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());//TODO delete this line
+					messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
+				} catch (IOException e) {
+					// This is very unlikely.
+					logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
+				}
+				rabbitMQMsgAck = acknowledgementQueue.poll();
 			}
 		}
-
-		//OLD (DELETE):
-		int numAcknowledgementsinQueue = RabbitMQConsumerController.acknowledgementQueue.size();
-		if (numAcknowledgementsinQueue > 0) {
-			/*
-			 * Since the semaphore is defined with the same number of permits as
-			 * consumer threads, acquiring a permit here should never block.
-			 */
-			if (RabbitMQConsumerController.acknowledgementQueueBusyCounterSemaphore.tryAcquire()) {
-
-				/*
-				 * Drain the acknowledgement queue to a collection and then process
-				 * the elements of this collection. This means that for a short period, 
-				 * the acknowledgement queue will be empty. That is why the test further
-				 * below which checks if the acknowledgement queue is empty, only 
-				 * performs this check if no permits are acquired for this semaphore.
-				 * In this way it knows that no other threads are performing this 
-				 * manipulation of the acknowledgement queue.
-				 */
-				while (true) {
-					RabbitMQMsgAck rabbitMQMsgAck = RabbitMQConsumerController.acknowledgementQueue
-							.poll();
-					if (rabbitMQMsgAck != null) {
-						acknowldegementQueueElements.add(rabbitMQMsgAck);
-					} else {
-						break;
-					}
-				}
-				logger.info("Processing {} elements from the acknowledgement queue...",
-						acknowldegementQueueElements.size());
-				// Process the drained elements.
-				for (RabbitMQMsgAck rabbitMQMsgAck : acknowldegementQueueElements) {
-					// Check if the acknowledgement shall be handled by this thread.
-					if (rabbitMQMsgAck.getConsumerThreadUUID().equals(this.uuid)) {
-						/*
-						 * Yes, the acknowledgement must be handled by this thread,
-						 * so we do that here.
-						 */
-						try {
-							messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
-						} catch (IOException e) {
-							// This is very unlikely.
-							logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
-						}
-					} else {
-						/*
-						 * No, the acknowledgement must be handled by another consumer
-						 * thread, so we return it to the queue.
-						 */
-						if (RabbitMQConsumerController.acknowledgementQueue.offer(rabbitMQMsgAck)) {
-							logger.info(
-									"RabbitMQMsgAck object offered *back* to acknowledgment queue: {}",
-									rabbitMQMsgAck);
-						} else {
-							logger.warn("Acknowledgement queue is full. Message will be requeued when consumer threads are restarted.");
-						}
-					}
-				}
-
-				/*
-				 * Remove all elements from acknowldegementQueueElements so that it 
-				 * will be empty the next time we execute this block of code, rather
-				 * than creating a new list each time.
-				 */
-				acknowldegementQueueElements.clear();
-
-				RabbitMQConsumerController.acknowledgementQueueBusyCounterSemaphore.release();
-			}
-		}
-		return numAcknowledgementsinQueue;
 	}
 
-	private void sleepALittleBit(boolean throttled, int numAcknowledgementsinQueue) {
+	private void sleepALittleBit(boolean throttled, BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 
 		long sleepMs = SHORT_SLEEP_MS;
 		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
 			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
 
-				if (numAcknowledgementsinQueue > 0) {
+				if (acknowledgementQueue.size() > 0) {
 					sleepMs = 0;	// so we continue to acknowledge messages quickly
 				} else {
 					// We always want to acknowledge messages in a timely manner.
@@ -450,7 +356,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			sleepMs = 0;
 		}
 		if (sleepMs > 0) {
-			logger.info("Disabled. Sleeping for {} ms", sleepMs);
+			logger.info("Sleeping for {} ms", sleepMs);
 			try {
 				Thread.sleep(sleepMs);
 			} catch (InterruptedException e) {
@@ -462,7 +368,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * 
 	 * @return true if it is OK for the current consumer thread to terminate.
 	 */
-	private boolean stoppingNowIsOK() {
+	private boolean stoppingNowIsOK(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		boolean stop = false;
 		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
 
@@ -476,21 +382,22 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				logger.info("Request to stop detected.");
 				/*
 				 * Before we allow the consumer threads to terminate, we try
-				 * to ensue that the acknowledgement queue is empty and that
-				 * it will *stay* empty. It is not a big deal if we let these
-				 * threads terminate without performing a positive acknowledgement
-				 * for a few messages because those messages will automatically
-				 * be requeued after the connection to the RabbitMQ broker is
-				 * closed. Of course,this will only be OK if the messages are 
-				 * treated in an idempotent manner so that requeuing a message 
-				 * will not cause problems. But it is possible (though unlikely),
-				 * that there could still be one or more elements in the 
-				 * acknowledgement queue corresponding to request the their 
-				 * message be rejected (dead-lettered). It may not be appropriate
-				 * to allow this messages to be automatically reueued. At any
-				 * rate, it will be most beneficial if we can be sure that the
-				 * acknowledgement queue is empty, and will stay that way, before
-				 * we let the consumer threads terminate.
+				 * to ensure that the acknowledgement queue for this thread is 
+				 * empty and that it will *stay* empty. Actually, it is not a 
+				 * big deal if we let this thread terminate without performing a
+				 * positive acknowledgement for a few messages because those 
+				 * messages will automatically be requeued anyway after the 
+				 * connection to the RabbitMQ broker is closed. Of course,this 
+				 * will only be OK if the messages are treated in an idempotent 
+				 * manner so that requeuing a message will not cause problems. 
+				 * But it is possible (though unlikely), that there could still 
+				 * be one or more elements in the acknowledgement queue that are
+				 * are for nacking or rejecting (dead-lettering) messages. It 
+				 * may not be appropriate to allow these messages to be 
+				 * automatically requeued. At any rate, it will be most 
+				 * beneficial if we can be sure that the acknowledgement queue 
+				 * is empty, and will stay that way, before we let this consumer
+				 * thread terminate.
 				 * 
 				 * But to be more-or-less sure that an empty acknowledgement
 				 * queue stays that way, we check *first* that:
@@ -508,32 +415,21 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					if (acquiredMessageHandlerPermits() == 0) {
 						if (RabbitMQProducerController.producerMsgQueue.size() == 0) {
 							/*
-							 * As described above, we can only trust a check that the
-							 * acknowledgement queue is empty if no other consumer threads
-							 * are processing the acknowledgement queue. We test for that
-							 * here. If another consumer queue is processing the 
-							 * acknowledgement queue, we simply continue and then test
-							 * again on the next trip through this loop. If the consumer
-							 * threads are not first disabled, it may be difficult to stop 
-							 * the consumer threads because the acknowledgment queue may never
-							 * become empty. But this should not be looked upon as a problem. 
-							 * All that is necessary is to disable the consumer threads,
-							 * AND THEN stop them a short while later after the consumed 
+							 * If the consumer threads are not first disabled, it may
+							 * be difficult to stop the consumer threads because the 
+							 * acknowledgment queue may never become empty. But this 
+							 * should not be looked upon as a problem. All that is 
+							 * necessary is to first disable the consumer threads, AND
+							 * THEN stop them a short while later after the consumed 
 							 * messages have been processed.
 							 */
-							if (acquiredAcknowledgementQueuePermits() == 0) {
-								if (RabbitMQConsumerController.acknowledgementQueue.size() == 0) {
-									logger.info("This thread will terminate.");
-									stop = true;
-								} else {
-									logger.info(
-											"Request to stop detected, but but there are still {} elements in the acknowledgement queue.",
-											RabbitMQConsumerController.acknowledgementQueue.size());
-								}
+							if (acknowledgementQueue.size() == 0) {
+								logger.info("This thread will terminate.");
+								stop = true;
 							} else {
 								logger.info(
-										"Request to stop detected, but there are {} other consumer thread(s) processing the acknowledgement queue.",
-										acquiredAcknowledgementQueuePermits());
+										"Request to stop detected, but but there are still {} elements in the acknowledgement queue.",
+										acknowledgementQueue.size());
 							}
 						} else {
 							logger.info(
@@ -562,18 +458,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			stop = true;
 		}
 		return stop;
-	}
-
-	/**
-	 * Returns the number of acknowledgement queue permits currently acquired.
-	 * This represents the number of consumer threads currently processing 
-	 * the acknowledgement queue.
-	 * 
-	 * @return the number of acknowledgement queue permits currently acquired
-	 */
-	private int acquiredAcknowledgementQueuePermits() {
-		return RabbitMQConsumerController.MAX_ACK_QUEUE_PERMITS -
-				RabbitMQConsumerController.acknowledgementQueueBusyCounterSemaphore.availablePermits();
 	}
 
 	/**

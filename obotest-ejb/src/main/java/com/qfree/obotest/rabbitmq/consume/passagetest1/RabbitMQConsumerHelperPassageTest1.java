@@ -1,7 +1,6 @@
 package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
@@ -21,8 +20,6 @@ import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
-import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -70,8 +67,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 */
 	private String subClassName = null;
 
-	private UUID consumerThreadUUID = null;
-
 	private Connection connection = null;
 	private Channel channel = null;
 	private QueueingConsumer consumer = null;
@@ -101,10 +96,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		this.acknowledgementQueue = acknowledgementQueue;
 	}
 
-	public void registerConsumerThreadUUID(UUID consumerThreadUUID) {
-		this.consumerThreadUUID = consumerThreadUUID;
-	}
-
 	public void openConnection() throws IOException {
 
 		ConnectionFactory factory = new ConnectionFactory();
@@ -131,7 +122,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
-		channel.basicQos(1);
+		channel.basicQos(10);
 	}
 
 	public void closeChannel() throws IOException {
@@ -152,21 +143,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		if (delivery != null) {
 
 			long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-
-			logger.debug(
-					"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
-					RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
-							- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
-									.availablePermits(),
-					RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
-							RabbitMQConsumerController.messageHandlerCounterSemaphore
-									.availablePermits(),
-					RabbitMQProducerController.producerMsgQueue.size(),
-					RabbitMQConsumerController.acknowledgementQueue.size(),
-					new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-					new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-					new Boolean(RabbitMQConsumerRunnable.throttled)
-					);
 
 			byte[] passageBytes = delivery.getBody();
 
@@ -267,7 +243,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	@Lock(LockType.WRITE)
 	private void firePassageEvent(byte[] passageBytes, long deliveryTag) {
 
-		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(consumerThreadUUID, acknowledgementQueue, deliveryTag);
+		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
 
 		try {
 
@@ -279,8 +255,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
 			passagePayload.setImageName(filename);
 			passagePayload.setImageBytes(imageBytes);
-			
-			logger.info("consumerThreadUUID = {}, deliveryTag = {}", consumerThreadUUID, deliveryTag);
 
 			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
 				logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName, passagePayload,
