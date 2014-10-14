@@ -1,6 +1,7 @@
 package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
+import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
 import javax.ejb.Lock;
@@ -15,10 +16,10 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
-import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -51,9 +52,12 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	/*
 	 * Since this thread is never interrupted via Thread.interrupt(), we don't 
 	 * want to block for any length of time so that this thread can respond to 
-	 * state changes in a timely fashion. So this timeout should be "small".
+	 * state changes in a timely fashion. So this timeout should be "small". In
+	 * addition, we want the acknowledgment queue to be processed frequently in
+	 * RabbitMQProducerRunnable (which calls the method handleNextDelivery() of 
+	 * this class), so for this reason also this delay should be short.
 	 */
-	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 1000;
+	private static final long RABBITMQ_CONSUMER_TIMEOUT_MS = 200;
 
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
@@ -67,6 +71,13 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private Channel channel = null;
 	private QueueingConsumer consumer = null;
 
+	/*
+	 * This queue holds the RabbitMQ delivery tags and other details for 
+	 * messages that are processed in other threads but which must be 
+	 * acked/nacked in this consumer thread.
+	 */
+	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
+
     @Inject
 	@PassageQualifier
 	Event<PassageTest1Event> passageEvent;
@@ -79,6 +90,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		 * were done, this field will contain the name of this class, of course.
 		 */
 		this.subClassName = this.getClass().getSimpleName();
+	}
+
+	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		this.acknowledgementQueue = acknowledgementQueue;
 	}
 
 	public void openConnection() throws IOException {
@@ -107,7 +122,28 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
-		channel.basicQos(1);
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+			/*
+			 * Since an acknowledgement for a consumed message cannot be sent 
+			 * until the message is fully processed *and* the outgoing message 
+			 * is published, the channel must be configured to receive several 
+			 * 5-10? messages before it sends an acknowledgment for an earlier
+			 * consumed message. Simple testing seemed to indicate that setting
+			 * this to 3-4 worked reasonably OK, but just to be sure I will use
+			 * a larger value here. 
+			 * 
+			 * A value of 1 here means that the message must be acknowledged 
+			 * before it will receive another from the RabbitMQ broker on this
+			 * channel.
+			 * 
+			 * TODO This parameter should be tuned for the types of messages used
+			 *      in production, as well as the amount of processing done on
+			 *      each message.
+			 */
+			channel.basicQos(10);
+		} else {
+			channel.basicQos(1);
+		}
 	}
 
 	public void closeChannel() throws IOException {
@@ -119,23 +155,19 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void configureConsumer() throws IOException {
 		consumer = new QueueingConsumer(channel);
 		channel.basicConsume(PASSAGE_QUEUE_NAME, false, consumer);
+		logger.info("Channel number = {}", channel.getChannelNumber());
 	}
 
-	public void handleDeliveries() throws InterruptedException, IOException, InvalidProtocolBufferException {
+	public void handleNextDelivery() throws InterruptedException, IOException, InvalidProtocolBufferException {
 
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
-			logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
-					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
-					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-					new Boolean(RabbitMQConsumerRunnable.throttled)
-					);
+			long deliveryTag = delivery.getEnvelope().getDeliveryTag();
 
 			byte[] passageBytes = delivery.getBody();
 
-			logger.debug("[{}]: Received passage: {} bytes", subClassName, passageBytes.length);
+			//			logger.debug("[{}]: Received passage: {} bytes", subClassName, passageBytes.length);
 
 			if (false) {
 
@@ -144,6 +176,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * 
 				 * TODO Update this to publish an outgoing message
 				 * or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
+				 * TODO WE need to enter an element in the acknowledgement queue if mode=AFTER_SEND
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
@@ -156,32 +189,52 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * Process the message asynchronously in another thread that 
 				 * receives a CDI event that is sent from this thread.
 				 */
-
-				/*
-				 * TODO CAN WE HANDLE THE CASE WHERE THE OBSERVER THREAD CANNOT PROCESS THE MESSAGE FOR SOME REASON?
-				 * TODO If there is something wrong with the RabbitMQ message payload...
-				 * we might want to sent it to a special RabbitMQ exchange that collects
-				 * bad messages, instead of processing it here through the normal workflow?
-				 */
-
-				logger.debug("[{}]: Requesting bean to fire an asynchronous \"passage\" CDI event...", subClassName);
-				this.firePassageEvent(passageBytes);
-				logger.debug("[{}]: Returned from request to fire the asynchronous \"passage\" CDI event", subClassName);
+				this.firePassageEvent(passageBytes, deliveryTag);
 
 			}
 
-			channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
+				channel.basicAck(deliveryTag, false);
+			}
 
 		} else {
+			logger.info("********** NO MESSAGE **********"); //TODO DELETEME
 			/*
 			 * This just means that there were no messages to consume after
 			 * waiting the timeout period. This in perfectly normal. The 
 			 * timeout is implemented so that the calling thread can check 
 			 * whether there has been a request made for it to terminate or 
 			 * whatever, even if this thread is not interrupted. 
+			 * 
+			 * IMPORTANT:  If this message appears a lot, it may be necessary
+			 *             to increase the "prefetch count" specified with
+			 *             Channel.basicQos(...).
 			 */
-			logger.trace("[{}]: consumer.nextDelivery() timed out after {} ms",
-					subClassName, RABBITMQ_CONSUMER_TIMEOUT_MS);
+		}
+	}
+
+	/**
+	 * Acknowledges a consumed RabbitMQ message, according to the supplied
+	 * RabbitMQMsgAck argument.
+	 * @throws IOException 
+	 */
+	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) {
+		try {
+			if (!rabbitMQMsgAck.isRejected()) {
+				// Acknowledge the message, and only this message.
+				logger.debug("Acking message: {}", rabbitMQMsgAck);
+				channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
+			} else {
+				/*
+				 * Reject the message, and request that it be requeued or not 
+				 * according to the value of rabbitMQMsgAck.isRequeueRejectedMsg().
+				 */
+				logger.debug("Nacking message: {}", rabbitMQMsgAck);
+				channel.basicNack(rabbitMQMsgAck.getDeliveryTag(), false, rabbitMQMsgAck.isRequeueRejectedMsg());
+			}
+		} catch (IOException e) {
+			// This is very unlikely.
+			logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
 		}
 	}
 
@@ -211,8 +264,9 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. TEST WITH AND WIHTOUT THIS @Asynchronous
 	//	@Asynchronous
 	@Lock(LockType.WRITE)
-	private void firePassageEvent(byte[] passageBytes) {
-		logger.debug("[{}]: Creating event payload for passage [{} bytes]", subClassName, passageBytes.length);
+	private void firePassageEvent(byte[] passageBytes, long deliveryTag) {
+
+		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
 
 		try {
 
@@ -221,7 +275,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			byte[] imageBytes = passage.getImage().toByteArray();
 
 			PassageTest1Event passagePayload = new PassageTest1Event();
-			passagePayload.setImage_name(filename);
+			passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
+			passagePayload.setImageName(filename);
 			passagePayload.setImageBytes(imageBytes);
 
 			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
@@ -230,6 +285,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				try {
 					passageEvent.fire(passagePayload);
 				} catch (Throwable e) {
+					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+
 					/*
 					 * If an exception was thrown firing a CDI event (I don't
 					 * know if this is even possible, we release the permit just
@@ -237,16 +294,27 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 					 * to receive the event that would normally do this. 
 					 */
 					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+
+					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+						rabbitMQMsgAck.setRejected(true);
+						rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
+						acknowledgeMsg(rabbitMQMsgAck);
+					}
 				}
 				logger.debug("[{}]: Returned from firing event", subClassName);
 			} else {
-				//TODO Ensure that a "nack/reject" is sent back to the RabbitMQ broker. Then the message should *not* be lost.
-				logger.warn("\n**********\nPermit not acquired for unacknowledged CDI event to be sent. The message will be lost!\n**********");
+				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+					rabbitMQMsgAck.setRejected(true);
+					rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
+					acknowledgeMsg(rabbitMQMsgAck);
+					logger.warn("Permit not acquired for CDI event to be sent.");
+				} else {
+					logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
+				}
 			}
 
 		} catch (InvalidProtocolBufferException e) {
-			logger.error("[{}]: An InvalidProtocolBufferException was thrown", subClassName);
+			logger.error("[{}]: An InvalidProtocolBufferException was thrown. The message will be lost!", subClassName);
 			logger.error("Exception details:", e);
 		}
 

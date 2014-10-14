@@ -1,6 +1,7 @@
 package com.qfree.obotest.rabbitmq.consume.imagetest;
 
 import java.io.IOException;
+import java.util.concurrent.BlockingQueue;
 
 import javax.ejb.Asynchronous;
 import javax.ejb.Lock;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.ImageEvent;
 import com.qfree.obotest.eventlistener.ImageQualifier;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -58,6 +60,13 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 	Channel channel = null;
 	QueueingConsumer consumer = null;
 
+	/*
+	 * This queue holds the RabbitMQ delivery tags and other details for 
+	 * messages that are processed in other threads but which must be 
+	 * acked/nacked in this consumer thread.
+	 */
+	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
+
     @Inject
 	@ImageQualifier
 	Event<ImageEvent> imageEvent;
@@ -70,6 +79,10 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		 * were done, this field will contain the name of this class, of course.
 		 */
 		this.subClassName = this.getClass().getSimpleName();
+	}
+
+	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		this.acknowledgementQueue = acknowledgementQueue;
 	}
 
 	public void openConnection() throws IOException {
@@ -112,7 +125,7 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		channel.basicConsume(IMAGE_QUEUE_NAME, false, consumer);
 	}
 
-	public void handleDeliveries() throws ShutdownSignalException,
+	public void handleNextDelivery() throws ShutdownSignalException,
 			ConsumerCancelledException, InterruptedException, IOException {
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
@@ -175,6 +188,11 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 			logger.trace("[{}]: consumer.nextDelivery() timed out after {} ms",
 					subClassName, RABBITMQ_CONSUMER_TIMEOUT_MS);
 		}
+	}
+
+	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) {
+		//FIXME Implement this method
+		throw new RuntimeException("Must implement method acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck)");
 	}
 
 	/*

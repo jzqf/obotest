@@ -5,10 +5,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
-//TODO This must be eliminated or updated to something related to producing:
 import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.ShutdownSignalException;
 
@@ -49,62 +46,49 @@ public class RabbitMQProducerRunnable implements Runnable {
 			messageProducerHelper.openConnection();
 			try {
 				messageProducerHelper.openChannel();
-				try {
 
-					//TODO This must be eliminated or updated to something related to producing:
-					//					messageProducerHelper.configureProducer(rabbitMQProducerController.getMessageBlockingQueue());
+				//TODO This must be eliminated or updated to something useful:
+				//				try {
+				//
+				//					messageProducerHelper.configureProducer(...);
 
-					while (true) {
+				while (publishNextMessage()) {
+					//				while (true) {
+					//					try {
+					//						messageProducerHelper.handlePublish();
+					//					} catch (InterruptedException e) {
+					//						logger.warn("InterruptedException received.");
+					//					} catch (ShutdownSignalException e) {
+					//						// I'm not sure if/when this will occur.
+					//						logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
+					//						break;
+					//					} catch (ConsumerCancelledException e) {
+					//						// I'm not sure if/when this will occur.
+					//						logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.", e);
+					//						break;
+					//					} catch (IOException e) {
+					//						/*
+					//						* TODO Catch this exception in handlePublish()? At any rate, the original consumed
+					//						*      message should probably be acked/rejected/dead-lettered, either there or here.
+					//						*/
+					//						logger.error("IOException received.", e);
+					//					} catch (Throwable e) {
+					//						// I'm not sure if/when this will occur.
+					//						// We log the exception, but do not terminate this thread.
+					//						logger.error("Unexpected exception caught.", e);
+					//					}
 
-						logger.info(
-								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
-								RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS -
-										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
-												.availablePermits(),
-								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
-								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-								RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-								new Boolean(RabbitMQConsumerRunnable.throttled)
-								);
-
-						try {
-							messageProducerHelper.handlePublish();
-						} catch (InterruptedException e) {
-							/*
-							 * Code elsewhere could be requesting that this
-							 * thread be terminated. This is checked for below.
-							 */
-							logger.info("InterruptedException received.");
-						} catch (ShutdownSignalException e) {
-							logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
-							break;
-							//TODO Either eliminate this catch block or rename "consumer" to something else here in this message
-						} catch (ConsumerCancelledException e) {
-							logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.", e);
-							break;
-						} catch (IOException e) {
-							logger.error("IOException received. The RabbitMQ connection will close.", e);
-							break;
-						} catch (Throwable e) {
-							// We log the exception, but do not terminate this thread.
-							logger.error("Unexpected exception caught.", e);
-						}
-
-						logger.trace("Checking if shutdown was requested...");
-						if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
-							logger.info("Request to stop detected. This thread will terminate.");
-							break;
-						}
+					if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
+						logger.info("Request to stop detected. This thread will terminate.");
+						break;
 					}
-
-				} catch (Exception e) {
-					//TODO Either eliminate this try block or rename "consumer" to something else here in this message
-					logger.error(
-							"Exception thrown setting up consumer object for RabbitMQ channel. This thread will terminate.",
-							e);
 				}
+
+				//				} catch (Exception e) {
+				//					logger.error(
+				//							"Exception thrown ... for RabbitMQ channel. This thread will terminate.",
+				//							e);
+				//				}
 
 			} catch (IOException e) {
 				logger.error(
@@ -149,4 +133,39 @@ public class RabbitMQProducerRunnable implements Runnable {
 
 	}
 
+	/**
+	 * Publishes next message from the producer queue, if there is one.
+	 * @return true if the main loop in the thread's run() method should continue
+	 *         looping and keep publishing messages, or false to stop producing
+	 *         and then terminate
+	 */
+	private boolean publishNextMessage() {
+		boolean continuePublishing = true;
+
+		try {
+			messageProducerHelper.handlePublish();
+		} catch (InterruptedException e) {
+			logger.warn("InterruptedException received.");
+		} catch (ShutdownSignalException e) {
+			// I'm not sure if/when this will occur.
+			logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
+			continuePublishing = false;
+		} catch (ConsumerCancelledException e) {
+			// I'm not sure if/when this will occur.
+			logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.", e);
+			continuePublishing = false;
+		} catch (IOException e) {
+			/*
+			* TODO Catch this exception in handlePublish()? At any rate, the original consumed
+			*      message should probably be acked/rejected/dead-lettered, either there or here.
+			*/
+			logger.error("IOException received.", e);
+		} catch (Throwable e) {
+			// I'm not sure if/when this will occur.
+			// We log the exception, but do not terminate this thread.
+			logger.error("Unexpected exception caught.", e);
+		}
+
+		return continuePublishing;
+	}
 }

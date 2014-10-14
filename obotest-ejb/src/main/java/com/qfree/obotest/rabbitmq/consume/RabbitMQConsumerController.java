@@ -84,11 +84,19 @@ public class RabbitMQConsumerController {
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerController.class);
 
 	public enum RabbitMQConsumerControllerStates {
-		STOPPED, RUNNING
+		STOPPED, DISABLED, RUNNING
 	};
+
+	public enum AckAlgorithms {
+		AFTER_RECEIVED, AFTER_PUBLISHED
+	};
+
+	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_PUBLISHED;
 
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
+	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
+
 	/*
 	 * This is the maximum number of message handler threads that are allowed to
 	 * run simultaneously. This is set to a sufficiently large number that this
@@ -110,6 +118,13 @@ public class RabbitMQConsumerController {
 	 * that we never block when attempting to acquire a permit.
 	 */
 	public static final int MAX_UNACKNOWLEDGED_CDI_EVENTS = 100;
+
+	/*
+	 * This is the size of the queue that holds RabbitMQMsgAck objects sent
+	 * back to the consumer threads to ack/nack messages that have been 
+	 * processed in other threads, either successfully or unsuccessfully.
+	 */
+	public static final int ACKNOWLEDGEMENT_QUEUE_LENGTH = 2000;	//TODO Optimize queue size?
 
 	/*
 	 * This counting semaphore is used to count the number of CDI events that 
@@ -272,6 +287,48 @@ public class RabbitMQConsumerController {
 		this.heartBeat();	// will start consumer thread(s), if necessary
 	}
 
+	/**
+	 * "Disables" the MessageMQ consumer thread(s).
+	 */
+	@Lock(LockType.WRITE)
+	public void disable() {
+		logger.info("Request received to disable RabbitMQ consumer thread(s)");
+		/*
+		 * We only "disable" the consumer threads if they are currently running;
+		 * If, instead, the threads are currently stopped, setting the state to
+		 * DISABLED will not necessarily cause any problems, but it does not
+		 * follow a proper state machine mechanism that only running threads 
+		 * can be disabled.
+		 */
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
+			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+		} else {
+			logger.warn("Attempt to disable consumer threads when current state is {}",
+					RabbitMQConsumerController.state);
+		}
+	}
+
+	/**
+	 * "Enables" the MessageMQ consumer thread(s).
+	 */
+	@Lock(LockType.WRITE)
+	public void enable() {
+		logger.info("Request received to enable RabbitMQ consumer thread(s)");
+		/*
+		 * We only "enable" the consumer threads if they are currently disabled;
+		 * If, instead, the threads are currently stopped, setting the state to
+		 * RUNNING will start the threads, which is not the same as "enabling"
+		 * the threads. "Enabling" stopped threads also does not follow a proper
+		 * state machine mechanism that only disabled threads can be enabled.
+		 */
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
+			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.RUNNING;
+		} else {
+			logger.warn("Attempt to enable consumer threads when current state is {}",
+					RabbitMQConsumerController.state);
+		}
+	}
+
 	@Schedule(second = "*/4", minute = "*", hour = "*")
 	@Lock(LockType.WRITE)
 	private void heartBeat() {
@@ -358,8 +415,9 @@ public class RabbitMQConsumerController {
 				RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
 				logger.info("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
-					//TODO Make this 30000 ms a configurable parameter or a final static variable
-					rabbitMQConsumerThread.join(30000);	// Wait maximum 30 seconds
+					rabbitMQConsumerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ consumer thread terminated or timed out after {} ms",
+							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
 				} catch (InterruptedException e) {
 				}
 			}
@@ -370,8 +428,9 @@ public class RabbitMQConsumerController {
 					RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.STOPPED;	// call repeatedly, just in case
 					logger.info("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
 					try {
-						//TODO Make this 30000 ms a configurable parameter or a final static variable
-						rabbitMQConsumerThreads.get(threadIndex).join(30000);	// Wait maximum 30 seconds
+						rabbitMQConsumerThreads.get(threadIndex).join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ consumer thread {} terminated or timed out after {} ms", threadIndex,
+								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
 					} catch (InterruptedException e) {
 					}
 				}

@@ -1,11 +1,15 @@
 package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.rabbitmq.client.ConsumerCancelledException;
@@ -28,7 +32,28 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	private static final int QUEUE_REMAINING_CAPACITY_HIGH_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH * 2 / 3;
 	private static final int UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER = 2;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER?
 	private static final int UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER = 8;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER?
-	private static final long THROTTLE_WAITING_LOOP_SLEEP_MS = 200;
+
+	private static final long SHORT_SLEEP_MS = 200;
+	private static final long LONG_SLEEP_MS = 1000;
+	//	private static final long THROTTLED_WAITING_LOOP_SLEEP_MS = SHORT_SLEEP_MS;
+	//	private static final long DISABLED_WAITING_LOOP_SLEEP_MS = LONG_SLEEP_MS;
+
+	/*
+	 * To signal that these consumer threads should terminat, another thread
+	 * will set:
+	 * 
+	 * RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED 
+	 * 
+	 * If this thread detects this condition below it will terminate, but 
+	 * only if certain conditions are met. If those conditions are not met,
+	 * the thread will continue looping and then try again on the next trip
+	 * through the loop. This is the maximum duration that thread 
+	 * termination will be deferred in this way. After this duration, this
+	 * thread will terminate anyway. This is a simple safety feature to 
+	 * avoid getting stuck in an endless loop in the unlikely case that the
+	 * conditions being tested for are *never* satisfied.
+	 */
+	private static final long MAX_WAIT_BEFORE_TERMINATION_MS =60000;  // 60s
 
 	/**
 	 * When true, message consumption will be disabled. This variable is set 
@@ -54,6 +79,15 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	private RabbitMQConsumerHelper messageConsumerHelper = null;
 
 	/*
+	 * This variable measures how long termination has been deferred because
+	 * the conditions necessary for termination have not been met. This is
+	 * used to implement a simple safety net to avoid getting caught in an
+	 * endless loop when shutting down the consumer threads.
+	 */
+	private long terminationRequestedTime = 0;
+
+
+	/*
 	 * This constructor is necessary, since this is a stateless session bean,
 	 * even though all instances of this bean used by the application are 
 	 * created with the "new" operator and use a constructor with arguments.
@@ -69,7 +103,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	@Override
 	public void run() {
 
-		logger.info("Starting RabbitMQ message consumer...");
+		logger.info("Starting RabbitMQ message consumer");
 
 		try {
 			messageConsumerHelper.openConnection();
@@ -77,107 +111,164 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				messageConsumerHelper.openChannel();
 				try {
 
+					/*
+					 * This queue holds the RabbitMQ delivery tags and other details for 
+					 * messages that are processed in other threads but which must be 
+					 * acked/nacked in this consumer thread. A new queue is created each
+					 * time a channel is opened because the delivery tags that are used
+					 * to ack/nack the consumed messages are specific to the channel 
+					 * used to consume the original messages.
+					 */
+					BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
+							RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH);
+
+					messageConsumerHelper.setAcknowledgementQueue(acknowledgementQueue);
+
 					messageConsumerHelper.configureConsumer();
-					logger.info("Waiting for image(s).");
+					logger.info("Waiting for messages...");
+
+					//					// These are for testing only. Delete after things work OK.
+					//					final long NUM_MSGS_TO_CONSUME = 100;
+					//					long msgs_consumed = 0;
 
 					while (true) {
 
-						// Update "throttled_ProducerMsgQueue", if necessary:
-						int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
-						if (throttled_ProducerMsgQueue) {
-							if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
-								logger.info("Consumption throttling based on producer queue size is now *off*");
-								throttled_ProducerMsgQueue = false;
-							}
-						} else {
-							if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
-								logger.info("Consumption throttling based on producer queue size is now *on*");
-								throttled_ProducerMsgQueue = true;
-							}
-						}
+						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
 
-						// Update "throttled_UnacknowledgedCDIEvents", if necessary:
-						int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
-								- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
-						if (throttled_UnacknowledgedCDIEvents) {
-							if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
-								logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
-								throttled_UnacknowledgedCDIEvents = false;
-							}
-						} else {
-							if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
-								logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
-								throttled_UnacknowledgedCDIEvents = true;
-							}
-						}
-
-						throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
-
-						logger.debug(
-								"Unack={}, Hndlrs={}, Q={}, QThrot={}, UnackThrot={}, throt={}",
-								numUnacknowledgeCDIEvents,
-								RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
-								RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-								remainingCapacity,
-								new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-								new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-								new Boolean(RabbitMQConsumerRunnable.throttled)
-								);
-
-						if (!throttled) {
-
-							try {
-								messageConsumerHelper.handleDeliveries();
-							} catch (InterruptedException e) {
-								/*
-								 * Code elsewhere could be requesting that this
-								 * thread be terminated. This is checked for below.
-								 */
-								logger.info("InterruptedException received.");
-							} catch (InvalidProtocolBufferException e) {
-								logger.info(
-										"InvalidProtocolBufferException received. The RabbitMQ connection will close.",
-										e);
-								break;
-							} catch (IOException e) {
-								logger.error("IOException received. The RabbitMQ connection will close.", e);
-								break;
-							} catch (ShutdownSignalException e) {
-								logger.info("ShutdownSignalException received. The RabbitMQ connection will close.", e);
-								break;
-							} catch (ConsumerCancelledException e) {
-								logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.",
-										e);
-								break;
-							} catch (Throwable e) {
-								// We log the exception, but do not terminate this thread.
-								logger.error("Unexpected exception caught.", e);
+							// Update "throttled_ProducerMsgQueue", if necessary:
+							int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
+							if (throttled_ProducerMsgQueue) {
+								if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
+									logger.info("Consumption throttling based on producer queue size is now *off*");
+									throttled_ProducerMsgQueue = false;
+								}
+							} else {
+								if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
+									logger.info("Consumption throttling based on producer queue size is now *on*");
+									throttled_ProducerMsgQueue = true;
+								}
 							}
 
-						} else {
+							// Update "throttled_UnacknowledgedCDIEvents", if necessary:
+							int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+									- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+											.availablePermits();
+							if (throttled_UnacknowledgedCDIEvents) {
+								if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
+									logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
+									throttled_UnacknowledgedCDIEvents = false;
+								}
+							} else {
+								if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
+									logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
+									throttled_UnacknowledgedCDIEvents = true;
+								}
+							}
+
+							throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
+
 							/*
-							 * Wait a short while to allow the condition that triggered 
-							 * the throttling to recover, and then run through the loop
-							 * again.
+							 * UE:  number of Unacknowledged CDI Events
+							 * MH:  number of message handlers running
+							 * PQ:  number of elements in the producer message queue
+							 * AQ:  number of elements in the acknowledgement queue
 							 */
-							logger.info("Throttled. Sleeping for {} ms", THROTTLE_WAITING_LOOP_SLEEP_MS);
-							try {
-								Thread.sleep(THROTTLE_WAITING_LOOP_SLEEP_MS);
-							} catch (InterruptedException e) {
+							logger.info(
+									"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
+									numUnacknowledgeCDIEvents,
+									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+											RabbitMQConsumerController.messageHandlerCounterSemaphore
+													.availablePermits(),
+									RabbitMQProducerController.producerMsgQueue.size(),
+									acknowledgementQueue.size(),
+									new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
+									new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
+									new Boolean(RabbitMQConsumerRunnable.throttled)
+									);
+
+							if (!throttled) {
+
+								//								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
+								//									msgs_consumed += 1;
+								//									logger.info("\n\nAbout to consume message...\n\n");
+
+								try {
+									messageConsumerHelper.handleNextDelivery();
+								} catch (InterruptedException e) {
+									logger.warn("InterruptedException received.");
+								} catch (InvalidProtocolBufferException e) {
+									/*
+									* If this exception is thrown, no message will have been received
+									* in handleNextDelivery(); therefore, there is no need to nack/reject
+									* any message.
+									*/
+									logger.error("InvalidProtocolBufferException received.", e);
+									//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PRODUCED=
+								} catch (IOException e) {
+									/*
+									* This exception can be thrown when channel.basicAck is executed in
+									* handleNextDelivery(). Since the problem occurs during an 
+									* acknowledgement, it should not be treated by nacking/rejecting
+									* the message, so we do nothing here other than logging.
+									*/
+									logger.error("IOException received.", e);
+								} catch (ShutdownSignalException e) {
+									/*
+									 * I'm not sure under which conditions this exception might be thrown.
+									 * 
+									 * If this exception is thrown, no message will have been received
+									 * in handleNextDelivery(); therefore, there is no need to nack/reject
+									 * any message.
+									 */
+									logger.info(
+											"ShutdownSignalException received. The RabbitMQ connection will close.",
+											e);
+									break;
+								} catch (ConsumerCancelledException e) {
+									/*
+									 * I'm not sure under which conditions this exception might be thrown.
+									 * 
+									 * If this exception is thrown, no message will have been received
+									 * in handleNextDelivery(); therefore, there is no need to nack/reject
+									 * any message.
+									 */
+									logger.info(
+											"ConsumerCancelledException received. The RabbitMQ connection will close.",
+											e);
+									break;
+								} catch (Throwable e) {
+									// I'm not sure if/when this will occur.
+									// We log the exception, but do not terminate this thread.
+									logger.error("Unexpected exception caught.", e);
+								}
+
+								//								} else {
+								//									//									try {
+								//									//										Thread.sleep(LONG_SLEEP_MS);
+								//									//									} catch (InterruptedException e) {
+								//									//									}
+								//								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
+
 							}
 						}
 
-						logger.trace("Checking if shutdown was requested...");
-						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
-							logger.info("Request to stop detected. This thread will terminate.");
-							break;
+						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+							acknowledgeMsgsInQueue(acknowledgementQueue);
 						}
 
-						//						logger.info("************** Sleeping for 0.5s to simulate throttling ***************");
-						//						try {
-						//							Thread.sleep(500);
-						//						} catch (InterruptedException e) {
-						//						}
+						/*
+						 * Sleep for a short period, as appropriate. In normal operation
+						 * while we are consuming messages, we will not pause here at all.
+						 */
+						sleepALittleBit(throttled, acknowledgementQueue);
+
+						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
+							if (stoppingNowIsOK(acknowledgementQueue)) {
+								break;
+							}
+						} else {
+							terminationRequestedTime = 0;  // reset, if necessary
+						}
 
 					}
 
@@ -228,4 +319,187 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 		logger.info("Thread exiting");
 	}
+
+	/**
+	 * Processes the elements in the specified acknowledgement queue, if the
+	 * queue has any elements.
+	 * @param acknowledgementQueue
+	 */
+	private void acknowledgeMsgsInQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		if (acknowledgementQueue.size() > 0) {
+			logger.debug("Processing {} elements from the acknowledgement queue...", acknowledgementQueue.size());
+			RabbitMQMsgAck rabbitMQMsgAck = acknowledgementQueue.poll();
+			while (rabbitMQMsgAck != null) {
+				logger.debug("Delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
+				messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
+				rabbitMQMsgAck = acknowledgementQueue.poll();
+			}
+		}
+	}
+
+	private void sleepALittleBit(boolean throttled, BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+
+		long sleepMs = SHORT_SLEEP_MS;
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
+			if (!throttled) {
+				/*
+				 * This is the normal case where we are:
+				 *   1. consuming messages (not DISABLED) and 
+				 *   2. message consumption is not throtted.
+				 */
+				sleepMs = 0;
+			}
+		} else {
+			/*
+			 * This covers both states: DISABLED & STOPPED
+			 */
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+
+				if (acknowledgementQueue.size() > 0) {
+					sleepMs = 0;	// so we continue to acknowledge messages quickly
+				} else {
+					// We always want to acknowledge messages in a timely manner.
+					sleepMs = SHORT_SLEEP_MS;
+				}
+
+			} else {
+				/*
+				 * If we do not acknowledge messages in the consumer threads and state=DISABLED, 
+				 * then we can we can afford to sleep a little longer.
+				 */
+				sleepMs = LONG_SLEEP_MS;
+			}
+		}
+
+		if (sleepMs > 0) {
+			logger.debug("Sleeping for {} ms", sleepMs);
+			try {
+				Thread.sleep(sleepMs);
+			} catch (InterruptedException e) {
+			}
+		}
+	}
+
+	/**
+	 * 
+	 * @return true if it is OK for the current consumer thread to terminate.
+	 */
+	private boolean stoppingNowIsOK(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+		boolean stop = false;
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+
+			if (terminationRequestedTime == 0) {
+				// Record when thread termination was initially requested.
+				terminationRequestedTime = System.currentTimeMillis();
+			}
+			// Check that we have not deferred thread termination too long.
+			if (System.currentTimeMillis() < terminationRequestedTime + MAX_WAIT_BEFORE_TERMINATION_MS) {
+
+				logger.info("Request to stop detected.");
+				/*
+				 * Before we allow the consumer threads to terminate, we try
+				 * to ensure that the acknowledgement queue for this thread is 
+				 * empty and that it will *stay* empty. Actually, it is not a 
+				 * big deal if we let this thread terminate without performing a
+				 * positive acknowledgement for a few messages because those 
+				 * messages will automatically be requeued anyway after the 
+				 * connection to the RabbitMQ broker is closed. Of course,this 
+				 * will only be OK if the messages are treated in an idempotent 
+				 * manner so that requeuing a message will not cause problems. 
+				 * But it is possible (though unlikely), that there could still 
+				 * be one or more elements in the acknowledgement queue that are
+				 * are for nacking or rejecting (dead-lettering) messages. It 
+				 * may not be appropriate to allow these messages to be 
+				 * automatically requeued. At any rate, it will be most 
+				 * beneficial if we can be sure that the acknowledgement queue 
+				 * is empty, and will stay that way, before we let this consumer
+				 * thread terminate.
+				 * 
+				 * But to be more-or-less sure that an empty acknowledgement
+				 * queue stays that way, we check *first* that:
+				 * 
+				 *   1. There are no unacknowledged CDI events.
+				 *   2.	There are no message handlers still running
+				 *   3. The producer message queue is empty.
+				 * 
+				 * These checks are a similar to those made in
+				 * RabbitMQProducerController.shutdown(), but here I do not
+				 * wait if the condition is not true and neither to I try to
+				 * force the producer threads to run.
+				 */
+				if (unacknowledgedCDIEventPermits() == 0) {
+					if (acquiredMessageHandlerPermits() == 0) {
+						if (RabbitMQProducerController.producerMsgQueue.size() == 0) {
+							/*
+							 * If the consumer threads are not first disabled, it may
+							 * be difficult to stop the consumer threads because the 
+							 * acknowledgment queue may never become empty. But this 
+							 * should not be looked upon as a problem. All that is 
+							 * necessary is to first disable the consumer threads, AND
+							 * THEN stop them a short while later after the consumed 
+							 * messages have been processed.
+							 */
+							if (acknowledgementQueue.size() == 0) {
+								logger.info("This thread will terminate.");
+								stop = true;
+							} else {
+								logger.info(
+										"Request to stop detected, but but there are still {} elements in the acknowledgement queue.",
+										acknowledgementQueue.size());
+							}
+						} else {
+							logger.info(
+									"Request to stop detected, but there are still {} elements in the producer queue.",
+									RabbitMQProducerController.producerMsgQueue.size());
+						}
+					} else {
+						logger.info(
+								"Request to stop detected, but there are still {} message handlers running.",
+								acquiredMessageHandlerPermits());
+					}
+				} else {
+					logger.info(
+							"Request to stop detected, but there are still {} unacknowledged CDI events.",
+							unacknowledgedCDIEventPermits());
+				}
+			} else {
+				logger.info(
+						"Termination has been deferred longer than the maximum of {} ms. "
+								+ "This thread will now terminate.",
+						MAX_WAIT_BEFORE_TERMINATION_MS);
+				stop = true;
+			}
+		} else {
+			logger.info("Request to stop detected. This thread will terminate.");
+			stop = true;
+		}
+		return stop;
+	}
+
+	/**
+	 * Returns the number of unacknowledged CDI events. These correspond to CDI
+	 * events that have been fired, but not received by a message handler by its
+	 * @Observes method.
+	 * 
+	 * @return the number of message handler permits currently acquired
+	 */
+	private int unacknowledgedCDIEventPermits() {
+		return RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS -
+				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
+	}
+
+	/**
+	 * Returns the number of message handler permits currently acquired. This
+	 * represents the number of message handlers threads that are currently
+	 * processing messages consumed from a RabbitMQ broker. The threads are 
+	 * started automatically by the Java EE application container as the target
+	 * of CDI events that are fired by RabbitMQ message consumer threads.
+	 * 
+	 * @return the number of message handler permits currently acquired
+	 */
+	private int acquiredMessageHandlerPermits() {
+		return RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits();
+	}
+
 }

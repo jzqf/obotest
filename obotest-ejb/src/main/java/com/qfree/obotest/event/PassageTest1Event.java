@@ -2,20 +2,30 @@ package com.qfree.obotest.event;
 
 import java.io.Serializable;
 
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+
 public class PassageTest1Event implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private String image_name;
-
+	private RabbitMQMsgAck rabbitMQMsgAck;
+	private String imageName;
 	private byte[] imageBytes;
 
-	public String getImage_name() {
-		return image_name;
+	public RabbitMQMsgAck getRabbitMQMsgAck() {
+		return rabbitMQMsgAck;
 	}
 
-	public void setImage_name(String image_name) {
-		this.image_name = image_name;
+	public void setRabbitMQMsgAck(RabbitMQMsgAck rabbitMQMsgAck) {
+		this.rabbitMQMsgAck = rabbitMQMsgAck;
+	}
+
+	public String getImageName() {
+		return imageName;
+	}
+
+	public void setImageName(String imageName) {
+		this.imageName = imageName;
 	}
 
 	public byte[] getImageBytes() {
@@ -28,7 +38,7 @@ public class PassageTest1Event implements Serializable {
 
 	@Override
 	public String toString() {
-		return "PassageTest1Event [name:" + this.image_name + ", bytes:" + imageBytes.length + "]";
+		return "PassageTest1Event [name:" + this.imageName + ", bytes:" + imageBytes.length + "]";
 	}
 
 }

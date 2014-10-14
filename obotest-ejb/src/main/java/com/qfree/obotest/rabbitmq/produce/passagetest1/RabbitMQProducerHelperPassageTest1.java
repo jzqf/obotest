@@ -12,15 +12,17 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.MessageProperties;
-//TODO This must be eliminated or updated to something related to producing:
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
-//TODO This must be eliminated or updated to something related to producing:
 
 /*
  * This class is used as a base class for helper singleton EJBs (one for each 
@@ -114,67 +116,52 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 		}
 	}
 
-	//TODO Should we set this.producerMsgQueue via a setter instead of this method?
-	// If so, then we can consider eliminating this configureProducer() method.
+	//TODO Eliminate this method if not useful.
 	//	@Override
-	//	public void configureProducer(BlockingQueue<byte[]> producerMsgQueue) {
-	//		logger.debug("[{}]: Setting the blocking queue that will be used by this producer thread: {}", subClassName,
-	//				producerMsgQueue);
-	//		this.producerMsgQueue = producerMsgQueue;
+	//	public void configureProducer(...) {
+	//		...;
 	//	}
 
 	@Override
 	public void handlePublish() throws InterruptedException, IOException {
 
-		logger.debug("q={} - Before poll",
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity()
-				);
+		RabbitMQMsgEnvelope rabbitMQMsgEnvelope = RabbitMQProducerController.producerMsgQueue.poll(
+				RABBITMQ_PRODUCER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+		if (rabbitMQMsgEnvelope != null) {
 
-		logger.trace("[{}]: producerMsgQueue.size() = {}", subClassName,
-				RabbitMQProducerController.producerMsgQueue.size());
-		logger.trace("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}", subClassName,
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity());
+			/*
+			 * Extract from rabbitMQMsgEnvelope both the outgoing serialized 
+			 * protobuf message to be published here as well as the 
+			 * RabbitMQMsgAck object that is associated with the original 
+			 * consumed RabbitMQ message (containing its delivery tag and other 
+			 * details).
+			 */
+			byte[] passageBytes = rabbitMQMsgEnvelope.getMessage();
+			RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
 
-		byte[] passageBytes = RabbitMQProducerController.producerMsgQueue.poll(RABBITMQ_PRODUCER_TIMEOUT_MS,
-				TimeUnit.MILLISECONDS);
-		if (passageBytes != null) {
+			logger.debug("Publishing RabbitMQ passage message [{} bytes]...", passageBytes.length);
+			//			logger.info("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
+			//					passageBytes.length);
 
-			logger.debug("q={} - After poll: Element removed: {} bytes",
-					RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-					passageBytes.length
-					);
-
-			logger.debug("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
-					passageBytes.length);
+			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
-			logger.debug("[{}]: Published RabbitMQ passage message", subClassName);
 
-			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.size() = {}", subClassName,
-					RabbitMQProducerController.producerMsgQueue.size());
-			logger.debug("[{}]: RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
-					subClassName,
-					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
-
-				//				logger.debug("[{}]: Sleeping for 2000 ms...", subClassName);
-				//				Thread.sleep(2000);
-
-			} else {
-
-			logger.debug("q={} - After poll: No message.",
-					RabbitMQProducerController.producerMsgQueue.remainingCapacity()
-					);
-
-				/*
-				 * This just means that there were no messages in the queue to
-				 * publish after waiting the timeout period. This in perfectly 
-				 * normal. The timeout is implemented so that the calling thread
-				 * can check whether there has been a request made for it to 
-				 * terminate or whatever, even if this thread is not 
-				 * interrupted. 
-				 */
-			logger.trace("[{}]: RabbitMQProducerController.producerMsgQueue.poll() timed out after {} ms",
-						subClassName, RABBITMQ_PRODUCER_TIMEOUT_MS);
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+				rabbitMQMsgAck.queueAck();
 			}
+
+		} else {
+			/*
+			 * This just means that there were no messages in the queue to
+			 * publish after waiting the timeout period. This in perfectly 
+			 * normal. The timeout is implemented so that the calling thread
+			 * can check whether there has been a request made for it to 
+			 * terminate or whatever, even if this thread is not 
+			 * interrupted. 
+			 */
+			//			logger.trace("q={} - After poll: No message.",
+			//					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
+		}
 	}
 
 	@PreDestroy
