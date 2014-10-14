@@ -88,10 +88,10 @@ public class RabbitMQConsumerController {
 	};
 
 	public enum AckAlgorithms {
-		AFTER_RECEIVED, AFTER_SENT
+		AFTER_RECEIVED, AFTER_PUBLISHED
 	};
 
-	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_SENT;
+	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_PUBLISHED;
 
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;

@@ -1,7 +1,6 @@
 package com.qfree.obotest.rabbitmq.produce.passagetest1;
 
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
@@ -23,9 +22,7 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.MessageProperties;
-//TODO This must be eliminated or updated to something related to producing:
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
-//TODO This must be eliminated or updated to something related to producing:
 
 /*
  * This class is used as a base class for helper singleton EJBs (one for each 
@@ -119,25 +116,17 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 		}
 	}
 
-	//TODO Should we set this.producerMsgQueue via a setter instead of this method?
-	// If so, then we can consider eliminating this configureProducer() method.
+	//TODO Eliminate this method if not useful.
 	//	@Override
-	//	public void configureProducer(BlockingQueue<byte[]> producerMsgQueue) {
-	//		logger.debug("[{}]: Setting the blocking queue that will be used by this producer thread: {}", subClassName,
-	//				producerMsgQueue);
-	//		this.producerMsgQueue = producerMsgQueue;
+	//	public void configureProducer(...) {
+	//		...;
 	//	}
 
 	@Override
 	public void handlePublish() throws InterruptedException, IOException {
 
-		logger.debug("q={} - Before poll",
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity()
-				);
-
 		RabbitMQMsgEnvelope rabbitMQMsgEnvelope = RabbitMQProducerController.producerMsgQueue.poll(
-				RABBITMQ_PRODUCER_TIMEOUT_MS,
-				TimeUnit.MILLISECONDS);
+				RABBITMQ_PRODUCER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 		if (rabbitMQMsgEnvelope != null) {
 
 			/*
@@ -157,43 +146,8 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
 
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
-
-				/*
-				 * Get the queue into which the rabbitMQMsgAck should be 
-				 * inserted. This is the queue that is managed by the  thread 
-				 * that consumed the original message that was processed by this
-				 * thread (all messages must be acknowledged on the same 
-				 * RabbitMQ channel on which the message was originally 
-				 * consumed).
-				 */
-				BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = rabbitMQMsgAck.getAcknowledgementQueue();
-
-				/*
-				 * This will tell the consumer thread that processes this 
-				 * RabbitMQMsgAck object to acknowledge the original message 
-				 * that it consumed earlier.
-				 */
-				rabbitMQMsgAck.setRejected(false);
-				/*
-				 * Log a warning if the acknowledgement queue is over 90% full.
-				 */
-				if (acknowledgementQueue.size() > 0.9 * RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH) {
-					logger.warn("Acknowledgement queue is over 90% full. Current size = {}."
-							+ " It may be necessary to increase the maximum capacity.",
-							acknowledgementQueue.size());
-				}
-				/*
-				 * Place the RabbitMQMsgAck object in the acknowledgement queue.
-				 */
-				if (acknowledgementQueue.offer(rabbitMQMsgAck)) {
-					logger.debug("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
-							rabbitMQMsgAck, acknowledgementQueue.size());
-				} else {
-					logger.warn("Acknowledgement queue is full."
-							+ " Message will be requeued when consumer threads are restarted.");
-				}
-
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+				rabbitMQMsgAck.queueAck();
 			}
 
 		} else {

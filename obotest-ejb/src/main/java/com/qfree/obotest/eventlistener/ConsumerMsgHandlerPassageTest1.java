@@ -1,7 +1,6 @@
 package com.qfree.obotest.eventlistener;
 
 import java.io.Serializable;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
 import javax.ejb.Asynchronous;
@@ -42,14 +41,25 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 * Release the permit that was acquired just before the CDI event that
 		 * is received in this methods was fired.
 		 */
-		logger.debug("Releasing unacknowledged CDI event permit. Unacked permits={}",
-				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
 		RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
 
-		logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
-				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
-				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
+		/*
+		 * UE:  number of Unacknowledged CDI Events
+		 * MH:  number of message handlers running
+		 * PQ:  number of elements in the producer message queue
+		 * AQ:  number of elements in the acknowledgement queue
+		 */
+		logger.debug(
+				"UE={}, MH={}, PQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
+				RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+						- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+								.availablePermits(),
+				RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
+						RabbitMQConsumerController.messageHandlerCounterSemaphore
+								.availablePermits(),
+				RabbitMQProducerController.producerMsgQueue.size(),
+				new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
+				new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
 				new Boolean(RabbitMQConsumerRunnable.throttled)
 				);
 
@@ -62,11 +72,7 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 * during shutdown that all messages have been processed in the before 
 		 * waiting for the producer queue to empty.
 		 */
-		logger.debug("Before acquiring message handler permit. Available permits = {}",
-				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 		if (RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire()) {
-			logger.debug("After acquiring message handler permit. Available permits = {}",
-					RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
 
 			try {
 				logger.debug("Start processing passage: {}...", event.toString());
@@ -97,27 +103,26 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				 */
 				//TODO The RabbitMQMsgEnvelope class is quite general. Consider reusing it elsewhere.
 				RabbitMQMsgEnvelope rabbitMQMsgEnvelope = new RabbitMQMsgEnvelope(rabbitMQMsgAck, passageBytes);
+
 				/*
 				 * Queue the message for publishing to a RabbitMQ broker. The 
 				 * actual publishing will be performed in a RabbitMQ producer 
 				 * background thread.
-				 */
-				logger.debug("Queuing message for delivery [{} bytes]", passageBytes.length);
-				/*
-				 * Remember that success here only means that the message was queued for
-				 * delivery, not that is *was* delivered!
+				 * 
+				 * Remember that success here only means that the message was 
+				 * queued for delivery, not that is *was* delivered!
 				 */
 				boolean success = this.send(rabbitMQMsgEnvelope);
 				if (success) {
-					logger.debug("Message successfully queued.");
+					logger.debug("Message successfully entered into the producer queue.");
 				} else {
-					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
-						rabbitMQMsgAck.setRejected(true);
-						rabbitMQMsgAck.setRequeueRejectedMsg(true);
-						//TODO We must enter rabbitMQMsgAck into the acknowledgement queue, acknowledgementQueue
-						logger.warn("Message could not be queued.");
+					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+						rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
+						logger.warn("Message could not be entered into the producer queue."
+								+ " The message will be requeued on the broker.");
 					} else {
-						logger.warn("\n**********\nMessage could not be queued. It will be lost!\n**********");
+						logger.warn("\n**********\nMessage could not be entered into the producer queue."
+								+ " It will be lost!\n**********");
 					}
 				}
 
@@ -128,80 +133,65 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 			}
 
 		} else {
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
-				rabbitMQMsgAck.setRejected(true);
-				rabbitMQMsgAck.setRequeueRejectedMsg(true);
-				//TODO We must enter rabbitMQMsgAck into the acknowledgement queue, acknowledgementQueue
-				logger.warn("Permit not acquired to process message.");
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+				rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
+				logger.warn("Permit not acquired to process message. The message will be requeued on the broker.");
 			} else {
-				logger.warn("\n**********\nPermit not acquired to process message. The message will be lost!\n**********");
+				logger.warn("\n**********\nPermit not acquired to process message."
+						+ " The message will be lost!\n**********");
 			}
 		}
 
 	}
 
 	public boolean send(RabbitMQMsgEnvelope rabbitMQMsgEnvelope) {
-
-		logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}",
-				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
-				RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-				new Boolean(RabbitMQConsumerRunnable.throttled)
-				);
-
-		logger.debug("RabbitMQProducerController.producerMsgQueue.size() = {}",
-				RabbitMQProducerController.producerMsgQueue.size());
-		logger.debug("RabbitMQProducerController.producerMsgQueue.remainingCapacity() = {}",
-				RabbitMQProducerController.producerMsgQueue.remainingCapacity());
+		/*
+		 * Log a warning if the producer queue is over 90% full. Hopefully, this
+		 * will never occur if we choose a value large enough. There are two
+		 * mechanisms implemented to limit the number of items offered to this
+		 * queue, depending on which acknowledgement mode is being used. Both
+		 * mechanisms are always enabled, but because of the different behaviour 
+		 * for the two acknowledgement modes, one mechanism becomes active for
+		 * one mode and the other mechanism becomes active for the other mode:
+		 * 
+		 * 1. ackAlgorithm = AFTER_RECEIVED:  The size of the producer queue is
+		 *    limited by consumer throttling based on producer queue size. This 
+		 *    is performed in RabbitMQConsumerRunnable. If this queue exceeds a
+		 *    certain limit, the consumer threads will stop consuming messages.
+		 *    While this is effective, there is a feedback lag, so the upper
+		 *    limit imposed in RabbitMQConsumerRunnable must e conservative so
+		 *    that the producer queue does not exceed its maximum length AFTER
+		 *    the consumer threads are throttled (since there may still be
+		 *    unacknowledged CDIevents and message handlers that are still 
+		 *    running that will add additional entries into the producer queue.
+		 *
+		 * 2. ackAlgorithm = AFTER_SENT:  The size of the producer queue is
+		 *    limited by the "prefetch count" specified by 
+		 *    Channel.basicQos(...). In effect, this also performs a type of 
+		 *    throttling on the incoming messages, but the mechanism is 
+		 *    completely different. The "prefetch count" does not have the 
+		 *    same effect for ackAlgorithm = AFTER_RECEIVED because in that mode
+		 *    the acknowledgement is sent immediately after receiving the
+		 *    message; hence, the number of unacknowledged messages cannot grow
+		 *    to a large enough value to effectively throttle the rate that
+		 *    incoming messages are consumed.
+		 */
+		if (RabbitMQProducerController.producerMsgQueue.size() > 0.9 * RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH) {
+			logger.warn("Acknowledgement queue is over 90% full. Current size = {}."
+					+ " It may be necessary to increase the maximum capacity"
+					+ ", but this can also happen if the producer threads are stopped.",
+					RabbitMQProducerController.producerMsgQueue.size());
+		}
 
 		/*    
-		 * If the queue is not full this will enter the message into the queue 
-		 * and then return "true". If the queue is full, this call will block 
-		 * for up to a certain timeout period. If a queue entry becomes 
-		 * available before this timeout period is reached, the message is 
-		 * placed in the queue and "true" is returned; otherwise, "false" is 
-		 * returned and the sender must deal with the failure.
-		 * 
-		 * TODO Staying in this loop forever is not good. Implement a better algorithm.
-		 *      After I implement ackAlgorithm = AckAlgorithms.AFTER_SENT, then I can 
-		 *      just remove this "while" loop and also remove the timeout
-		 *      PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS. Instead, just let the offer just
-		 *      fail immediately and treat this by setting the appropriate attributes
-		 *      of the RabbitMQMsgAck so that the message will be nacked, and then
-		 *      place that RabbitMQMsgAck object in the acknowledgement queue (or
-		 *      let that be done in the calling code).
+		 * Offer the message to the producer queue. Since the producer queue 
+		 * should, ideally, never fill up (see the comments above where a
+		 * warning is logged if the queue starts to fill up for an explanation
+		 * of why this is so), we do not go to heroic lengths to treat the case
+		 * where the offer block here.
 		 */
-		logger.debug("Offering a message to the producer blocking queue [{} bytes]...",
-				rabbitMQMsgEnvelope.getMessage().length);
-		boolean success = false;
-		while (!success) {
-			try {
-				//			success = RabbitMQProducerController.producerMsgQueue.offer(bytes);
-				success = RabbitMQProducerController.producerMsgQueue.offer(rabbitMQMsgEnvelope,
-						PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS,
-						TimeUnit.MILLISECONDS);
-
-				logger.debug("Unacked permits={}, Handler permits={}, Q={}, throttled={}, success={}",
-						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits(),
-						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits(),
-						RabbitMQProducerController.producerMsgQueue.remainingCapacity(),
-						new Boolean(RabbitMQConsumerRunnable.throttled),
-						new Boolean(success)
-						);
-
-				//TODO If I remove the timeout on the "offer(...)" above, then I can delete this catch block. Sweet.
-			} catch (InterruptedException e) {
-				//TODO Can we ensure that the message to be queued, i.e., "bytes", is not lost?
-				logger.warn("\n********************" +
-						"\nInterruptedException caught while waiting to offer a message to the queue. " +
-						"\nPerhaps a request has been made to stop the RabbitMQ producer thread(s) in single threaded mode"
-						+
-						"\nor the RabbitMQ producer thread(s)?" +
-						"\nCan we ensure that the message to be queued is not lost?" +
-						"\n********************");
-			}
-		}
-		return success;
+		logger.debug("Offering a message to the producer queue [{} bytes]...", rabbitMQMsgEnvelope.getMessage().length);
+		return RabbitMQProducerController.producerMsgQueue.offer(rabbitMQMsgEnvelope);
 	}
 
 	@PreDestroy

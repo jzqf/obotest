@@ -2,7 +2,14 @@ package com.qfree.obotest.rabbitmq;
 
 import java.util.concurrent.BlockingQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
+
 public class RabbitMQMsgAck {
+
+	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerController.class);
 
 	/*
 	 * This is the queue into which a RabbitMQMsgAck object should be inserted
@@ -64,6 +71,39 @@ public class RabbitMQMsgAck {
 
 	public void setRequeueRejectedMsg(boolean requeueRejectedMsg) {
 		this.requeueRejectedMsg = requeueRejectedMsg;
+	}
+
+	public void queueAck() {
+		this.rejected = false;
+		queue();
+	}
+
+	public void queueNack(boolean requeueRejectedMsg) {
+		this.rejected = true;
+		this.requeueRejectedMsg = requeueRejectedMsg;
+		queue();
+	}
+
+	private void queue() {
+		/*
+		 * Log a warning if the acknowledgement queue is over 90% full.
+		 */
+		if (acknowledgementQueue.size() > 0.9 * RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH) {
+			logger.warn("Acknowledgement queue is over 90% full. Current size = {}."
+					+ " It may be necessary to increase the maximum capacity.",
+					acknowledgementQueue.size());
+		}
+
+		/*
+		 * Place the RabbitMQMsgAck object in the acknowledgement queue.
+		 */
+		if (acknowledgementQueue.offer(this)) {
+			logger.debug("RabbitMQMsgAck object offered to acknowledgment queue: {}. Queue size = {}",
+					this, acknowledgementQueue.size());
+		} else {
+			logger.warn("Acknowledgement queue is full."
+					+ " Message will be requeued when consumer threads are restarted.");
+		}
 	}
 
 	@Override

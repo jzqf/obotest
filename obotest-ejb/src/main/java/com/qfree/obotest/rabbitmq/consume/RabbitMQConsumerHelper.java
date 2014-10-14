@@ -22,6 +22,6 @@ public interface RabbitMQConsumerHelper {
 
 	public void handleNextDelivery() throws InterruptedException, IOException, InvalidProtocolBufferException;
 
-	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) throws IOException;
+	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck);
 
 }

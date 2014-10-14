@@ -190,7 +190,7 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		}
 	}
 
-	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) throws IOException {
+	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) {
 		//FIXME Implement this method
 		throw new RuntimeException("Must implement method acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck)");
 	}

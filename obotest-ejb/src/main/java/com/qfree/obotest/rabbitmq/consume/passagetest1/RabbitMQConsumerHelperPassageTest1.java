@@ -122,7 +122,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
-		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
 			/*
 			 * Since an acknowledgement for a consumed message cannot be sent 
 			 * until the message is fully processed *and* the outgoing message 
@@ -176,7 +176,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * 
 				 * TODO Update this to publish an outgoing message
 				 * or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
-				 * TODO WE also need to enter an element in the acknowledgement queue if mode=AFTER_SEND
+				 * TODO WE need to enter an element in the acknowledgement queue if mode=AFTER_SEND
 				 */
 				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
 				String filename = passage.getImageName();
@@ -188,13 +188,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				/*
 				 * Process the message asynchronously in another thread that 
 				 * receives a CDI event that is sent from this thread.
-				 */
-
-				/*
-				 * TODO CAN WE HANDLE THE CASE WHERE THE OBSERVER THREAD CANNOT PROCESS THE MESSAGE FOR SOME REASON?
-				 * TODO If there is something wrong with the RabbitMQ message payload...
-				 * we might want to sent it to a special RabbitMQ exchange that collects
-				 * bad messages, instead of processing it here through the normal workflow?
 				 */
 				this.firePassageEvent(passageBytes, deliveryTag);
 
@@ -225,18 +218,23 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * RabbitMQMsgAck argument.
 	 * @throws IOException 
 	 */
-	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) throws IOException {
-		if (!rabbitMQMsgAck.isRejected()) {
-			// Acknowledge the message, and only this message.
-			logger.debug("Acking message: {}", rabbitMQMsgAck);
-			channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
-		} else {
-			/*
-			 * Reject the message, and request that it be requeued or not 
-			 * according to the value of rabbitMQMsgAck.isRequeueRejectedMsg().
-			 */
-			logger.debug("Nacking message: {}", rabbitMQMsgAck);
-			channel.basicNack(rabbitMQMsgAck.getDeliveryTag(), false, rabbitMQMsgAck.isRequeueRejectedMsg());
+	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) {
+		try {
+			if (!rabbitMQMsgAck.isRejected()) {
+				// Acknowledge the message, and only this message.
+				logger.debug("Acking message: {}", rabbitMQMsgAck);
+				channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
+			} else {
+				/*
+				 * Reject the message, and request that it be requeued or not 
+				 * according to the value of rabbitMQMsgAck.isRequeueRejectedMsg().
+				 */
+				logger.debug("Nacking message: {}", rabbitMQMsgAck);
+				channel.basicNack(rabbitMQMsgAck.getDeliveryTag(), false, rabbitMQMsgAck.isRequeueRejectedMsg());
+			}
+		} catch (IOException e) {
+			// This is very unlikely.
+			logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
 		}
 	}
 
@@ -287,6 +285,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				try {
 					passageEvent.fire(passagePayload);
 				} catch (Throwable e) {
+					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+
 					/*
 					 * If an exception was thrown firing a CDI event (I don't
 					 * know if this is even possible, we release the permit just
@@ -294,28 +294,19 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 					 * to receive the event that would normally do this. 
 					 */
 					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
 
-					/*
-					 * TODO If an error occurs here or in one of the other blocks of code in this method,
-					 * 		instead of entering rabbitMQMsgAck into the acknowledgement queue, return enough
-					 *      information to the handleNextDelivery() method and perform the
-					 *      acknowledgement there, even if mode=AFTER_SENT, as I describe in my "ToDo - Work.txt"
-					 *      document in the section that starts with:
-					 *      "Try to perform all acknowledgement queue manipulations in the consumer thread "run" method ..."
-					 */
-					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
 						rabbitMQMsgAck.setRejected(true);
-						rabbitMQMsgAck.setRequeueRejectedMsg(true);
-						//TODO We must enter rabbitMQMsgAck into the acknowledgement queue in, acknowledgementQueue
+						rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
+						acknowledgeMsg(rabbitMQMsgAck);
 					}
 				}
 				logger.debug("[{}]: Returned from firing event", subClassName);
 			} else {
-				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
 					rabbitMQMsgAck.setRejected(true);
-					rabbitMQMsgAck.setRequeueRejectedMsg(true);
-					//TODO We must enter rabbitMQMsgAck into the acknowledgement queue, acknowledgementQueue
+					rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
+					acknowledgeMsg(rabbitMQMsgAck);
 					logger.warn("Permit not acquired for CDI event to be sent.");
 				} else {
 					logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");

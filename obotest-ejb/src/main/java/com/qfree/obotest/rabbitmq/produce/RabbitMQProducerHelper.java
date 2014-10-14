@@ -1,7 +1,6 @@
 package com.qfree.obotest.rabbitmq.produce;
 
 import java.io.IOException;
-//TODO This must be eliminated or updated to something related to producing:
 
 public interface RabbitMQProducerHelper {
 
@@ -13,8 +12,8 @@ public interface RabbitMQProducerHelper {
 
 	public void closeChannel() throws IOException;
 
-	//TODO Is configureProducer() needed at all?
-	//	public void configureProducer(BlockingQueue<byte[]> producerMsgQueue) throws IOException;
+	//TODO Eliminate this method (also wherever it appears) if not needed:
+	//	public void configureProducer(...) throws ..., e.g., IOException;
 
 	//TODO Rename handlePublish --> ?????????????????????????????????
 	public void handlePublish() throws InterruptedException, IOException;

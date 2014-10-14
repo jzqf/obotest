@@ -168,10 +168,10 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
 
 							/*
-							 *	UE:  number of Unacknowledged CDI Events
-							*	MH:  number of message handlers running
-							*	PQ:  number of elements in the producer message queue
-							*	AQ:  number of elements in the acknowledgement queue
+							 * UE:  number of Unacknowledged CDI Events
+							 * MH:  number of message handlers running
+							 * PQ:  number of elements in the producer message queue
+							 * AQ:  number of elements in the acknowledgement queue
 							 */
 							logger.info(
 									"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
@@ -192,39 +192,55 @@ public class RabbitMQConsumerRunnable implements Runnable {
 								//									msgs_consumed += 1;
 								//									logger.info("\n\nAbout to consume message...\n\n");
 
-									try {
-										messageConsumerHelper.handleNextDelivery();
-									} catch (InterruptedException e) {
-										logger.warn("InterruptedException received.");
-									} catch (InvalidProtocolBufferException e) {
-										/*
-										 * TODO Catch this exception in handleNextDelivery()? At any rate, the consumed
-										 *      message should probably be rejected/dead-lettered, either there or here.
-										 */
-										logger.error("InvalidProtocolBufferException received.", e);
-									} catch (IOException e) {
-										/*
-										 * TODO Catch this exception in handleNextDelivery()? At any rate, the consumed
-										 *      message should probably be rejected/dead-lettered, either there or here.
-										 */
-										logger.error("IOException received.", e);
-									} catch (ShutdownSignalException e) {
-										// I'm not sure if/when this will occur.
-										logger.info(
-												"ShutdownSignalException received. The RabbitMQ connection will close.",
-												e);
-										break;
-									} catch (ConsumerCancelledException e) {
-										// I'm not sure if/when this will occur.
-										logger.info(
-												"ConsumerCancelledException received. The RabbitMQ connection will close.",
-												e);
-										break;
-									} catch (Throwable e) {
-										// I'm not sure if/when this will occur.
-										// We log the exception, but do not terminate this thread.
-										logger.error("Unexpected exception caught.", e);
-									}
+								try {
+									messageConsumerHelper.handleNextDelivery();
+								} catch (InterruptedException e) {
+									logger.warn("InterruptedException received.");
+								} catch (InvalidProtocolBufferException e) {
+									/*
+									* If this exception is thrown, no message will have been received
+									* in handleNextDelivery(); therefore, there is no need to nack/reject
+									* any message.
+									*/
+									logger.error("InvalidProtocolBufferException received.", e);
+									//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PRODUCED=
+								} catch (IOException e) {
+									/*
+									* This exception can be thrown when channel.basicAck is executed in
+									* handleNextDelivery(). Since the problem occurs during an 
+									* acknowledgement, it should not be treated by nacking/rejecting
+									* the message, so we do nothing here other than logging.
+									*/
+									logger.error("IOException received.", e);
+								} catch (ShutdownSignalException e) {
+									/*
+									 * I'm not sure under which conditions this exception might be thrown.
+									 * 
+									 * If this exception is thrown, no message will have been received
+									 * in handleNextDelivery(); therefore, there is no need to nack/reject
+									 * any message.
+									 */
+									logger.info(
+											"ShutdownSignalException received. The RabbitMQ connection will close.",
+											e);
+									break;
+								} catch (ConsumerCancelledException e) {
+									/*
+									 * I'm not sure under which conditions this exception might be thrown.
+									 * 
+									 * If this exception is thrown, no message will have been received
+									 * in handleNextDelivery(); therefore, there is no need to nack/reject
+									 * any message.
+									 */
+									logger.info(
+											"ConsumerCancelledException received. The RabbitMQ connection will close.",
+											e);
+									break;
+								} catch (Throwable e) {
+									// I'm not sure if/when this will occur.
+									// We log the exception, but do not terminate this thread.
+									logger.error("Unexpected exception caught.", e);
+								}
 
 								//								} else {
 								//									//									try {
@@ -236,7 +252,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							}
 						}
 
-						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
 							acknowledgeMsgsInQueue(acknowledgementQueue);
 						}
 
@@ -315,13 +331,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			RabbitMQMsgAck rabbitMQMsgAck = acknowledgementQueue.poll();
 			while (rabbitMQMsgAck != null) {
 				logger.debug("Delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
-				try {
-					logger.debug("Acknowledging message with delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());//TODO delete this line
-					messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
-				} catch (IOException e) {
-					// This is very unlikely.
-					logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
-				}
+				messageConsumerHelper.acknowledgeMsg(rabbitMQMsgAck);
 				rabbitMQMsgAck = acknowledgementQueue.poll();
 			}
 		}
@@ -330,8 +340,20 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	private void sleepALittleBit(boolean throttled, BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 
 		long sleepMs = SHORT_SLEEP_MS;
-		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
+			if (!throttled) {
+				/*
+				 * This is the normal case where we are:
+				 *   1. consuming messages (not DISABLED) and 
+				 *   2. message consumption is not throtted.
+				 */
+				sleepMs = 0;
+			}
+		} else {
+			/*
+			 * This covers both states: DISABLED & STOPPED
+			 */
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
 
 				if (acknowledgementQueue.size() > 0) {
 					sleepMs = 0;	// so we continue to acknowledge messages quickly
@@ -347,14 +369,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				 */
 				sleepMs = LONG_SLEEP_MS;
 			}
-		} else if (!throttled) {
-			/*
-			 * This is the normal case where we are:
-			 *   1. consuming messages (not DISABLED) and 
-			 *   2. message consumption is not throtted.
-			 */
-			sleepMs = 0;
 		}
+
 		if (sleepMs > 0) {
 			logger.debug("Sleeping for {} ms", sleepMs);
 			try {
@@ -370,7 +386,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 */
 	private boolean stoppingNowIsOK(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		boolean stop = false;
-		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_SENT) {
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
 
 			if (terminationRequestedTime == 0) {
 				// Record when thread termination was initially requested.
