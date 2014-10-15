@@ -132,16 +132,24 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 * this to 3-4 worked reasonably OK, but just to be sure I will use
 			 * a larger value here. 
 			 * 
-			 * A value of 1 here means that the message must be acknowledged 
-			 * before it will receive another from the RabbitMQ broker on this
-			 * channel.
+			 * A value of 1 here means that the RabbitMQ broker will send us 
+			 * maximum 1 unacknowledged message at any time. As soon as we 
+			 * acknowledge a message, we are free to consume the single 
+			 * (unacknowledged) message that the RabbitMQ broker sent us 
+			 * earlier. The broker will then send us one more unacknowledged 
+			 * message while we are working on the message we just consumed. 
+			 * In this way, there should always one message at our end waiting
+			 * to be consumed.
 			 * 
 			 * TODO This parameter should be tuned for the types of messages used
 			 *      in production, as well as the amount of processing done on
 			 *      each message.
 			 */
 			channel.basicQos(10);
+		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
+			channel.basicQos(1);
 		} else {
+			logger.warn("Untreated case for RabbitMQConsumerController.ackAlgorithm when setting QOS!");
 			channel.basicQos(1);
 		}
 	}
@@ -154,7 +162,13 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 	public void configureConsumer() throws IOException {
 		consumer = new QueueingConsumer(channel);
-		channel.basicConsume(PASSAGE_QUEUE_NAME, false, consumer);
+
+		boolean autoAck = false;
+		//		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AUTO) {
+		//			autoAck = true;
+		//		}
+		channel.basicConsume(PASSAGE_QUEUE_NAME, autoAck, consumer);
+
 		logger.info("Channel number = {}", channel.getChannelNumber());
 	}
 
@@ -167,7 +181,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 			byte[] passageBytes = delivery.getBody();
 
-			//			logger.debug("[{}]: Received passage: {} bytes", subClassName, passageBytes.length);
+			logger.debug("Received passage message: deliveryTag={}, {} bytes", deliveryTag, passageBytes.length);
+			//			logger.info("[{}]: Received message: {} bytes", subClassName, passageBytes.length);
 
 			if (false) {
 

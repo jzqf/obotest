@@ -35,8 +35,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 	private static final long SHORT_SLEEP_MS = 200;
 	private static final long LONG_SLEEP_MS = 1000;
-	//	private static final long THROTTLED_WAITING_LOOP_SLEEP_MS = SHORT_SLEEP_MS;
-	//	private static final long DISABLED_WAITING_LOOP_SLEEP_MS = LONG_SLEEP_MS;
 
 	/*
 	 * To signal that these consumer threads should terminat, another thread
@@ -128,7 +126,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					logger.info("Waiting for messages...");
 
 					//					// These are for testing only. Delete after things work OK.
-					//					final long NUM_MSGS_TO_CONSUME = 100;
+					//					final long NUM_MSGS_TO_CONSUME = 1;
 					//					long msgs_consumed = 0;
 
 					while (true) {
@@ -190,63 +188,60 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 								//								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
 								//									msgs_consumed += 1;
-								//									logger.info("\n\nAbout to consume message...\n\n");
+								//									logger.info("\n\nAbout to consume message...\n");
 
-								try {
-									messageConsumerHelper.handleNextDelivery();
-								} catch (InterruptedException e) {
-									logger.warn("InterruptedException received.");
-								} catch (InvalidProtocolBufferException e) {
-									/*
-									* If this exception is thrown, no message will have been received
-									* in handleNextDelivery(); therefore, there is no need to nack/reject
-									* any message.
-									*/
-									logger.error("InvalidProtocolBufferException received.", e);
-									//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PRODUCED=
-								} catch (IOException e) {
-									/*
-									* This exception can be thrown when channel.basicAck is executed in
-									* handleNextDelivery(). Since the problem occurs during an 
-									* acknowledgement, it should not be treated by nacking/rejecting
-									* the message, so we do nothing here other than logging.
-									*/
-									logger.error("IOException received.", e);
-								} catch (ShutdownSignalException e) {
-									/*
-									 * I'm not sure under which conditions this exception might be thrown.
-									 * 
-									 * If this exception is thrown, no message will have been received
-									 * in handleNextDelivery(); therefore, there is no need to nack/reject
-									 * any message.
-									 */
-									logger.info(
-											"ShutdownSignalException received. The RabbitMQ connection will close.",
-											e);
-									break;
-								} catch (ConsumerCancelledException e) {
-									/*
-									 * I'm not sure under which conditions this exception might be thrown.
-									 * 
-									 * If this exception is thrown, no message will have been received
-									 * in handleNextDelivery(); therefore, there is no need to nack/reject
-									 * any message.
-									 */
-									logger.info(
-											"ConsumerCancelledException received. The RabbitMQ connection will close.",
-											e);
-									break;
-								} catch (Throwable e) {
-									// I'm not sure if/when this will occur.
-									// We log the exception, but do not terminate this thread.
-									logger.error("Unexpected exception caught.", e);
-								}
+									try {
+										messageConsumerHelper.handleNextDelivery();
+									} catch (InterruptedException e) {
+										logger.warn("InterruptedException received.");
+									} catch (InvalidProtocolBufferException e) {
+										/*
+										* If this exception is thrown, no message will have been received
+										* in handleNextDelivery(); therefore, there is no need to nack/reject
+										* any message.
+										*/
+										logger.error("InvalidProtocolBufferException received:", e);
+										//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PRODUCED=
+									} catch (IOException e) {
+										/*
+										* This exception can be thrown when channel.basicAck is executed in
+										* handleNextDelivery(). Since the problem occurs during an 
+										* acknowledgement, it should not be treated by nacking/rejecting
+										* the message, so we do nothing here other than logging.
+										*/
+										logger.error("IOException received:", e);
+									} catch (ShutdownSignalException e) {
+										/*
+										 * I'm not sure under which conditions this exception might be thrown.
+										 * 
+										 * If this exception is thrown, no message will have been received
+										 * in handleNextDelivery(); therefore, there is no need to nack/reject
+										 * any message.
+										 */
+										logger.info("ShutdownSignalException received. The RabbitMQ connection will close.");
+										break;
+									} catch (ConsumerCancelledException e) {
+										/*
+										 * I'm not sure under which conditions this exception might be thrown.
+										 * 
+										 * If this exception is thrown, no message will have been received
+										 * in handleNextDelivery(); therefore, there is no need to nack/reject
+										 * any message.
+										 */
+										logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.");
+										break;
+									} catch (Throwable e) {
+										// I'm not sure if/when this will occur.
+										// We log the exception, but do not terminate this thread.
+										logger.error("Unexpected exception caught:", e);
+									}
 
 								//								} else {
-								//									//									try {
-								//									//										Thread.sleep(LONG_SLEEP_MS);
-								//									//									} catch (InterruptedException e) {
-								//									//									}
+								//									try {
+								//										logger.info("Sleeping 2s...");
+								//										Thread.sleep(2 * LONG_SLEEP_MS);
+								//									} catch (InterruptedException e) {
+								//									}
 								//								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
 
 							}

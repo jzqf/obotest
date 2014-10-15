@@ -11,7 +11,7 @@ public class DefaultUncaughtExceptionHandler implements UncaughtExceptionHandler
 
 	@Override
 	public void uncaughtException(Thread t, Throwable e) {
-		logger.error("An uncaught exception was thrown for thread {}:", t);
+		logger.error("An uncaught exception was thrown for thread {}", t);
 		logger.error("The uncaught exception was:", e);
 	}
 

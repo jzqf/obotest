@@ -18,7 +18,6 @@ import javax.ejb.LockType;
 import javax.ejb.Schedule;
 import javax.ejb.Singleton;
 import javax.ejb.Startup;
-import javax.ejb.Timeout;
 import javax.ejb.Timer;
 import javax.ejb.TimerConfig;
 import javax.ejb.TimerService;
@@ -235,7 +234,7 @@ public class RabbitMQProducerController {
 	 * started. This method can also be called directly, i.e., not via the EJB 
 	 * timer service.
 	 */
-	@Timeout
+	//	@Timeout
 	@Lock(LockType.WRITE)
 	public void start() {
 		logger.info("Request received to start RabbitMQ producer thread(s)");
