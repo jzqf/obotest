@@ -107,6 +107,12 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
+			/*
+			 * Enable TX mode on this channel.
+			 */
+			channel.txSelect();
+		}
 	}
 
 	@Override
@@ -146,7 +152,19 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
 
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
+				/*
+				 * This will block here until the RabittMQ broker that just received
+				 * the published message has written the message to disk and performed
+				 * some sort of fsync(), which takes a significant time to complete.
+				 * Therefore, this acknowledgement algorithm, while very safe, will 
+				 * probably be too slow in practice.
+				 */
+				channel.txCommit();
+			}
+
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
 				rabbitMQMsgAck.queueAck();
 			}
 

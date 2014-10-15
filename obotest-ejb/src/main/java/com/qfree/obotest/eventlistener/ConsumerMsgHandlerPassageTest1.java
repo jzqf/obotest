@@ -116,7 +116,9 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				if (success) {
 					logger.debug("Message successfully entered into the producer queue.");
 				} else {
-					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 						rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
 						logger.warn("Message could not be entered into the producer queue."
 								+ " The message will be requeued on the broker.");
@@ -133,7 +135,9 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 			}
 
 		} else {
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 				rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
 				logger.warn("Permit not acquired to process message. The message will be requeued on the broker.");
 			} else {

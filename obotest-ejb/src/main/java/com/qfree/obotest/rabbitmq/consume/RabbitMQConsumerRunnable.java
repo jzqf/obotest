@@ -247,7 +247,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							}
 						}
 
-						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 							acknowledgeMsgsInQueue(acknowledgementQueue);
 						}
 
@@ -348,7 +350,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 			/*
 			 * This covers both states: DISABLED & STOPPED
 			 */
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 
 				if (acknowledgementQueue.size() > 0) {
 					sleepMs = 0;	// so we continue to acknowledge messages quickly
@@ -381,7 +385,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 */
 	private boolean stoppingNowIsOK(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		boolean stop = false;
-		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+				|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+				|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 
 			if (terminationRequestedTime == 0) {
 				// Record when thread termination was initially requested.

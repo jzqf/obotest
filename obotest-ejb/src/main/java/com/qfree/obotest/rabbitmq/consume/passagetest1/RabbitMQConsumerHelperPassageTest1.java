@@ -146,6 +146,16 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 *      each message.
 			 */
 			channel.basicQos(10);
+		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
+			/*
+			 * The explanation here is similar to that for the algorithm AFTER_PUBLISHED
+			 */
+			channel.basicQos(10);
+		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+			/*
+			 * The explanation here is similar to that for the algorithm AFTER_PUBLISHED
+			 */
+			channel.basicQos(10);
 		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
 			channel.basicQos(1);
 		} else {
@@ -310,7 +320,9 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 					 */
 					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
 
-					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 						rabbitMQMsgAck.setRejected(true);
 						rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
 						acknowledgeMsg(rabbitMQMsgAck);
@@ -318,7 +330,9 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				}
 				logger.debug("[{}]: Returned from firing event", subClassName);
 			} else {
-				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED) {
+				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 					rabbitMQMsgAck.setRejected(true);
 					rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
 					acknowledgeMsg(rabbitMQMsgAck);
