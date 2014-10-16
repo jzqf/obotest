@@ -357,17 +357,25 @@ public class RabbitMQProducerController {
 		 */
 		logger.info("Waiting for the producerMsgQueue queue to empty...");
 		waitForRabbitMQProducerQueueToEmpty();
-
+		
 		/*
 		 * Now that the blocking queue that is is used to hold outgoing messages
-		 * is empty, the producer thread(s) can be terminated.
+		 * is empty, the producer thread(s) can be terminated. *If* in 
+		 * acknowledgement mode AFTER_PUBLISHED_CONFIRMED, these threads
+		 * will not terminate until they each confirm that they have fully 
+		 * processed their pending "PublisherConfirms" synchronized TreeMaps.
+		 * This means that they have received all pending light-weight publisher
+		 * confirms and have entered these results into the acknowledgement 
+		 * queue for the appropriate consumer thread.
 		 */
 		logger.info("Stopping the RabbitMQ producer threads and waiting for them to terminate...");
 		stopProducerThreadsAndWaitForTermination();
 
 		/*
 		 * Finally, stop the RabbitMQ consumer thread(s), which should be 
-		 * disabled, and then wait for them to terminate.
+		 * disabled, and then wait for them to terminate. These threads will 
+		 * not terminate until they each confirm that they have fully processed
+		 * their acknowledgement queues. 
 		 * 
 		 * The RabbitMQConsumerController bean is responsible for shutting 
 		 * itself down in its @PreDestroy method, but the @PreDestroy method of
@@ -423,8 +431,8 @@ public class RabbitMQProducerController {
 			 * somewhere, a request come in to shut down these threads while we
 			 * are waiting for the CDI events to be acknowledged. In order to 
 			 * start these threads, it is important that this be done by 
-			 * executing start(), and *not* by simply assigning the "RUNNING" s
-			 * tate to the state attribute for the producer controller 
+			 * executing start(), and *not* by simply assigning the "RUNNING"
+			 * state to the state attribute for the producer controller 
 			 * singelton, i.e.,
 			 * RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 			 * This will not work for starting the threads in this case because 

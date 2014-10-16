@@ -107,12 +107,6 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
-		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
-			/*
-			 * Enable TX mode on this channel.
-			 */
-			channel.txSelect();
-		}
 	}
 
 	@Override
@@ -122,11 +116,10 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 		}
 	}
 
-	//TODO Eliminate this method if not useful.
-	//	@Override
-	//	public void configureProducer(...) {
-	//		...;
-	//	}
+	@Override
+	public Channel getChannel() {
+		return channel;
+	}
 
 	@Override
 	public void handlePublish() throws InterruptedException, IOException {
@@ -149,12 +142,22 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 			//			logger.info("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
 			//					passageBytes.length);
 
-			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
+			/*
+			 * TODO Should I also pass mandatory=true here? This is to ensure that 
+			 *      the message gets into at least one queue. If the server cannot 
+			 *      do this, it will send the message's deliveryTag (sequence number) 
+			 *      back via the installed ReturnListener.  I need to read the 
+			 *      section "When will messages be confirmed?" of the document:
+			 *      https://www.rabbitmq.com/confirms.html to really understand what
+			 *      this means and to ensure that I am handling this situation 
+			 *      correctly (if/after I start using the "mandatory" flag). Of
+			 *      course, I will also have to implement a ReturnListener as well.
+			 */
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
 
 			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
 				/*
-				 * This will block here until the RabittMQ broker that just received
+				 * This will block here until the RabbitMQ broker that just received
 				 * the published message has written the message to disk and performed
 				 * some sort of fsync(), which takes a significant time to complete.
 				 * Therefore, this acknowledgement algorithm, while very safe, will 

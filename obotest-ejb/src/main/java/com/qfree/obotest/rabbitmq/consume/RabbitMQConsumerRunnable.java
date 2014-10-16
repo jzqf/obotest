@@ -125,9 +125,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					messageConsumerHelper.configureConsumer();
 					logger.info("Waiting for messages...");
 
-					//					// These are for testing only. Delete after things work OK.
-					//					final long NUM_MSGS_TO_CONSUME = 1;
-					//					long msgs_consumed = 0;
+					// These are for testing only. Delete after things work OK.
+					final long NUM_MSGS_TO_CONSUME = 1;
+					long msgs_consumed = 0;
 
 					while (true) {
 
@@ -186,9 +186,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 							if (!throttled) {
 
-								//								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
-								//									msgs_consumed += 1;
-								//									logger.info("\n\nAbout to consume message...\n");
+								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
+									msgs_consumed += 1;
+									logger.info("\n\nAbout to consume message...\n");
 
 									try {
 										messageConsumerHelper.handleNextDelivery();
@@ -236,13 +236,13 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										logger.error("Unexpected exception caught:", e);
 									}
 
-								//								} else {
-								//									try {
-								//										logger.info("Sleeping 2s...");
-								//										Thread.sleep(2 * LONG_SLEEP_MS);
-								//									} catch (InterruptedException e) {
-								//									}
-								//								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
+								} else {
+									try {
+										logger.info("Sleeping 2s...");
+										Thread.sleep(2 * LONG_SLEEP_MS);
+									} catch (InterruptedException e) {
+									}
+								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
 
 							}
 						}

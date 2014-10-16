@@ -2,6 +2,8 @@ package com.qfree.obotest.rabbitmq.produce;
 
 import java.io.IOException;
 
+import com.rabbitmq.client.Channel;
+
 public interface RabbitMQProducerHelper {
 
 	public void openConnection() throws IOException;
@@ -12,8 +14,7 @@ public interface RabbitMQProducerHelper {
 
 	public void closeChannel() throws IOException;
 
-	//TODO Eliminate this method (also wherever it appears) if not needed:
-	//	public void configureProducer(...) throws ..., e.g., IOException;
+	public Channel getChannel();
 
 	//TODO Rename handlePublish --> ?????????????????????????????????
 	public void handlePublish() throws InterruptedException, IOException;
