@@ -4,11 +4,13 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
@@ -26,8 +28,14 @@ import com.rabbitmq.client.Channel;
 public class RabbitMQProducerRunnable implements Runnable {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQProducerRunnable.class);
+	/*
+	 * Since this thread is never interrupted via Thread.interrupt(), we don't 
+	 * want to block for any length of time so that this thread can respond to 
+	 * state changes in a timely fashion. So this timeout should be "small".
+	 */
+	private static final long RABBITMQ_PRODUCER_TIMEOUT_MS = 1000;
 
-	private RabbitMQProducerHelper messageProducerHelper = null;
+	RabbitMQProducerHelper messageProducerHelper = null;
 
 	/*
 	 * This variable measures how long termination has been deferred because
@@ -68,11 +76,20 @@ public class RabbitMQProducerRunnable implements Runnable {
 					 */
 					channel.txSelect();
 				} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+
 					/*
 					 * Enable publisher acknowledgements (lightweight publisher 
 					 * confirms) on this channel.
 					 */
 					channel.confirmSelect();
+
+					/*
+					 * This listener is triggered by the broker after it accepts a 
+					 * message and has done whatever is necessary to persist it so
+					 * that it will not be lost if that broker dies.
+					 */
+					channel.addConfirmListener(new RabbitMQProducerConfirmListener());
+
 				} else {
 					// For other cases, there is nothing to do here.
 				}
@@ -110,23 +127,114 @@ public class RabbitMQProducerRunnable implements Runnable {
 				SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms = Collections
 						.synchronizedSortedMap(new TreeMap<Long, RabbitMQMsgAck>());
 
-				//				while (publishNextMessage()) {
+				long nextPublishSeqNo = 0;  // only used for AckAlgorithms.AFTER_PUBLISHED_CONFIRMED
 				while (true) {
 
 					try {
-						messageProducerHelper.handlePublish();
-					} catch (InterruptedException e) {
-						logger.warn("InterruptedException received.");
-					} catch (IOException e) {
+						RabbitMQMsgEnvelope rabbitMQMsgEnvelope;
+						rabbitMQMsgEnvelope = RabbitMQProducerController.producerMsgQueue.poll(
+								RABBITMQ_PRODUCER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+						if (rabbitMQMsgEnvelope != null) {
+
+							/*
+							 * Extract from rabbitMQMsgEnvelope both the outgoing serialized 
+							 * protobuf message to be published here as well as the 
+							 * RabbitMQMsgAck object that is associated with the original 
+							 * consumed RabbitMQ message (containing its delivery tag and other 
+							 * details).
+							 */
+							byte[] messageBytes = rabbitMQMsgEnvelope.getMessage();
+							RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
+
+							if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+								/*
+								 * If, for some reason, the message is not actually published 
+								 * below in handlePublish(messageBytes), testing shows that
+								 * there is no harm calling getNextPublishSeqNo() here again
+								 * when trying to send the same or a different message on the
+								 * next trip through this loop. In other words, the 
+								 * getNextPublishSeqNo() call here seems to fetch the next
+								 * value that RabbitMQ manages itself; this call does not force
+								 * the sequence number to be incremented. In addition, testing
+								 * shows that this sequence number is incremented whether or 
+								 * not we call getNextPublishSeqNo() here. So, we do not need
+								 * to concern ourself with what to do if an exception is
+								 * thrown while publishing a message.
+								 */
+								nextPublishSeqNo = channel.getNextPublishSeqNo();
+							}
+
+							try {
+								logger.info("Publishing message [{} bytes]...", messageBytes.length);
+
+								messageProducerHelper.handlePublish(messageBytes);
+
+								if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
+									/*
+									 * This will block here until the RabbitMQ broker that just received
+									 * the published message has written the message to disk and performed
+									 * some sort of fsync(), which takes a significant time to complete.
+									 * Therefore, this acknowledgement algorithm, while very safe, will 
+									 * probably be too slow in practice.
+									 */
+									channel.txCommit();
+								}
+
+								if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+										|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
+									/*
+									 * Enter rabbitMQMsgAck into the acknowledgment queue where it will
+									 * be processed by the apropriate consumer thread.
+									 */
+									rabbitMQMsgAck.queueAck();
+								}
+
+								if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+									/*
+									 * Enter the RabbitMQMsgAck object into the "pending publisher confirms"
+									 * map. This map will be processed by the ConfirmListener added above.
+									 */
+									pendingPublisherConfirms.put(nextPublishSeqNo, rabbitMQMsgAck);
+								}
+
+							} catch (IOException e) {
+								logger.error("IOException caught publishing a message:", e);
+								if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+										|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED
+										|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
+								/*
+									* Even for algorithm AckAlgorithms.AFTER_PUBLISHED_CONFIRMED, this
+									* enters the RabbitMQMsgAck object directly into the acknowledgement
+									* queue instead of into the "pending publisher confirms" map because
+									* we do not expect the broker to send back a publisher confirm. Testing
+									* and experience will show if this is the appropriate treatment.
+									* TODO Should we dead-letter a message when an IOException is caught?
+									*/
+								rabbitMQMsgAck.queueNack(true);  // requeue rejected message
+								}
+							}
+
+						} else {
+							/*
+							 * This just means that there were no messages in the queue to
+							 * publish after waiting the timeout period. This in perfectly 
+							 * normal. The timeout is implemented so that this thread can
+							 * check whether there has been a request made for it to 
+							 * terminate or whatever. 
+							 */
+						}
+					} catch (InterruptedException e1) {
 						/*
-						* TODO Catch this exception in handlePublish()? At any rate, the original consumed
-						*      message should probably be acked/rejected/dead-lettered, either there or here.
-						*/
-						logger.error("IOException received.", e);
+						 * An interrupt exception was caught while we were waiting
+						 * to receive an item from the producer queue. This application
+						 * does not currently throw this exception. Regardless, there 
+						 * is nothing necessary to do here.						 */
 					}
 
 					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-						// Is there anything to do here?
+						logger.info("{} pending publisher confirms, pendingPublisherConfirms =\n{}",
+								pendingPublisherConfirms.size(), pendingPublisherConfirms);
+						//TODO Is there anything to do here?
 					}
 
 					//if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {

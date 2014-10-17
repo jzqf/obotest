@@ -126,7 +126,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					logger.info("Waiting for messages...");
 
 					// These are for testing only. Delete after things work OK.
-					final long NUM_MSGS_TO_CONSUME = 1;
+					final long NUM_MSGS_TO_CONSUME = 2;
 					long msgs_consumed = 0;
 
 					while (true) {
