@@ -3,7 +3,9 @@ package com.qfree.obotest.rabbitmq.produce;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -34,6 +36,22 @@ public class RabbitMQProducerRunnable implements Runnable {
 	 * state changes in a timely fashion. So this timeout should be "small".
 	 */
 	private static final long RABBITMQ_PRODUCER_TIMEOUT_MS = 1000;
+	/*
+	 * To signal that these consumer threads should terminate, another thread
+	 * will set:
+	 * 
+	 * RabbitMQProducerController.state == RabbitMQProducerController.STOPPED 
+	 * 
+	 * If this thread detects this condition below it will terminate, but 
+	 * only if certain conditions are met. If those conditions are not met,
+	 * the thread will continue looping and then try again on the next trip
+	 * through the loop. This is the maximum duration that thread 
+	 * termination will be deferred in this way. After this duration, this
+	 * thread will terminate anyway. This is a simple safety feature to 
+	 * avoid getting stuck in an endless loop in the unlikely case that the
+	 * conditions being tested for are *never* satisfied.
+	 */
+	private static final long MAX_WAIT_BEFORE_TERMINATION_MS = 60000;  // 60s
 
 	RabbitMQProducerHelper messageProducerHelper = null;
 
@@ -103,6 +121,8 @@ public class RabbitMQProducerRunnable implements Runnable {
 		SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms = Collections
 				.synchronizedSortedMap(new TreeMap<Long, RabbitMQMsgAck>());
 
+		SortedSet<Long> pendingPublisherConfirmsSet = Collections.synchronizedSortedSet(new TreeSet<Long>());
+
 		try {
 			messageProducerHelper.openConnection();
 			try {
@@ -128,7 +148,8 @@ public class RabbitMQProducerRunnable implements Runnable {
 					 * messages and does whatever is necessary to persist them
 					 * so that they will not be lost if that broker dies.
 					 */
-					channel.addConfirmListener(new RabbitMQProducerConfirmListener(pendingPublisherConfirms));
+					channel.addConfirmListener(new RabbitMQProducerConfirmListener(pendingPublisherConfirms,
+							pendingPublisherConfirmsSet));
 
 					/*
 					 * This listener is triggered by the broker for failed 
@@ -176,10 +197,12 @@ public class RabbitMQProducerRunnable implements Runnable {
 								 * thrown while publishing a message.
 								 */
 								nextPublishSeqNo = channel.getNextPublishSeqNo();
+
+								logger.debug("Next msg from producer queue: rabbitMQMsgAck = {}", rabbitMQMsgAck);
 							}
 
 							try {
-								logger.info("Publishing message [{} bytes]...", messageBytes.length);
+								logger.debug("nextPublishSeqNo = {}. Publishing message...", nextPublishSeqNo);
 
 								messageProducerHelper.handlePublish(messageBytes);
 
@@ -208,7 +231,11 @@ public class RabbitMQProducerRunnable implements Runnable {
 									 * Enter the RabbitMQMsgAck object into the "pending publisher confirms"
 									 * map. This map will be processed by the ConfirmListener added above.
 									 */
+									logger.debug("Published msg. Entering into pendingPublisherConfirms: "
+											+ "nextPublishSeqNo = {}, rabbitMQMsgAck = {}",
+											nextPublishSeqNo, rabbitMQMsgAck);
 									pendingPublisherConfirms.put(nextPublishSeqNo, rabbitMQMsgAck);
+									pendingPublisherConfirmsSet.add(nextPublishSeqNo);
 								}
 
 							} catch (IOException e) {
@@ -246,22 +273,15 @@ public class RabbitMQProducerRunnable implements Runnable {
 					}
 
 					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-						logger.info("{} pending publisher confirms, pendingPublisherConfirms =\n{}",
-								pendingPublisherConfirms.size(), pendingPublisherConfirms);
-						//TODO Is there anything to do here?
+						logger.debug("{} pending publisher confirms", pendingPublisherConfirms.size());
 					}
 
-					//if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
-					//	if (stoppingNowIsOK(acknowledgementQueue)) {
-					//		break;
-					//	}
-					//} else {
-					//	terminationRequestedTime = 0;  // reset, if necessary
-					//}
-
 					if (RabbitMQProducerController.state == RabbitMQProducerControllerStates.STOPPED) {
-						logger.info("Request to stop detected. This thread will terminate.");
-						break;
+						if (isOKToStop(pendingPublisherConfirms)) {
+							break;
+						}
+					} else {
+						terminationRequestedTime = 0;  // reset, if necessary
 					}
 				}
 			} catch (IOException e) {
@@ -303,8 +323,67 @@ public class RabbitMQProducerRunnable implements Runnable {
 			}
 		}
 
+		logger.debug("pendingPublisherConfirms = {}", pendingPublisherConfirms);
+		logger.debug("pendingPublisherConfirmsSet = {}", pendingPublisherConfirmsSet);
+
 		logger.info("Thread exiting");
 
+	}
+
+	/**
+	 * 
+	 * @return true if it is OK for the current consumer thread to terminate.
+	 */
+	private boolean isOKToStop(SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms) {
+		boolean stop = false;
+		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+
+			if (terminationRequestedTime == 0) {
+				// Record when thread termination was initially requested.
+				terminationRequestedTime = System.currentTimeMillis();
+			}
+			// Check that we have not deferred thread termination too long.
+			if (System.currentTimeMillis() < terminationRequestedTime + MAX_WAIT_BEFORE_TERMINATION_MS) {
+
+				logger.info("Request to stop detected.");
+				/*
+				 * Before we allow the producer threads to terminate, we try
+				 * to ensure that the "pending confirms" map for this thread is 
+				 * empty. Actually, it is not a 
+				 * big deal if we let this thread terminate without processinf
+				 * all items in this map because the corresponding 
+				 * messages will automatically be requeued anyway after the 
+				 * connection to the RabbitMQ broker is closed. Of course,this 
+				 * will only be OK if the messages are treated in an idempotent 
+				 * manner so that requeuing a message will not cause problems. 
+				 * But it is possible (though unlikely), that there could still 
+				 * be one or more elements in the "pending confirms" map that 
+				 * could be "Nacked" by the broker. It may or 
+				 * may not be appropriate to allow these messages to be 
+				 * automatically requeued. At any rate, it will be most 
+				 * beneficial if we can be sure that the "pending confirms" map
+				 * is empty, before we let this consumer thread terminate.
+				 */
+				if (pendingPublisherConfirms.size() == 0) {
+					logger.info("This thread will terminate.");
+					stop = true;
+				} else {
+					logger.info(
+							"Request to stop detected, but but there are still {} elements in the pending acknowledgement map.",
+							pendingPublisherConfirms.size());
+				}
+			} else {
+				logger.info(
+						"Termination has been deferred longer than the maximum of {} ms. "
+								+ "This thread will now terminate.",
+						MAX_WAIT_BEFORE_TERMINATION_MS);
+				stop = true;
+			}
+		} else {
+			logger.info("Request to stop detected. This thread will be allowed terminate.");
+			stop = true;
+		}
+		return stop;
 	}
 
 //	/**

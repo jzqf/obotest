@@ -79,6 +79,7 @@ public class RabbitMQMsgAck {
 	}
 
 	public void queueNack(boolean requeueRejectedMsg) {
+		logger.warn("Nacking a message");
 		this.rejected = true;
 		this.requeueRejectedMsg = requeueRejectedMsg;
 		queue();

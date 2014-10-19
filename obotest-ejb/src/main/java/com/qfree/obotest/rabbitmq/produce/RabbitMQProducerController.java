@@ -360,13 +360,13 @@ public class RabbitMQProducerController {
 		
 		/*
 		 * Now that the blocking queue that is is used to hold outgoing messages
-		 * is empty, the producer thread(s) can be terminated. *If* in 
-		 * acknowledgement mode AFTER_PUBLISHED_CONFIRMED, these threads
+		 * is empty, the producer thread(s) can be terminated. If the  
+		 * acknowledgement mode is AFTER_PUBLISHED_CONFIRMED, these threads
 		 * will not terminate until they each confirm that they have fully 
 		 * processed their pending "PublisherConfirms" synchronized TreeMaps.
-		 * This means that they have received all pending light-weight publisher
-		 * confirms and have entered these results into the acknowledgement 
-		 * queue for the appropriate consumer thread.
+		 * This means waiting until they have received all pending light-weight
+		 * publisher confirms and have entered these results into the 
+		 * acknowledgement queue for the appropriate consumer thread.
 		 */
 		logger.info("Stopping the RabbitMQ producer threads and waiting for them to terminate...");
 		stopProducerThreadsAndWaitForTermination();
@@ -403,7 +403,35 @@ public class RabbitMQProducerController {
 		 */
 		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
 			RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+		} else if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
+			// There is nothing to do.
+		} else if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
+			/*
+			 * We need the consumer threads to be executing, but disabled during
+			 * shutdown.  This is so that these threads can continue to process
+			 * their acknowledgement queues, but *not* consume any more 
+			 * messages. However, if these threads are currently STOPPED, it
+			 * will not actually help to start them and place them in the state
+			 * DISABLED because all acknowledgements must be made on the same
+			 * channel that the messages were consumed on. If the consumer 
+			 * threads are currently STOPPED then the channels are closed; 
+			 * restarting them will open *new* channels which will not be able
+			 * to acknowledge the messages using the deliveryTags in the 
+			 * thread's acknowledgment queue because:
+			 *  1. The deliveryTags would only be useful for the channel that
+			 *     was closed.
+			 *  2. When the consumer threads are started, *new* acknowlegement
+			 *     queues are created anyway, so that old queues are gone.
+			 * So this is why do nothing here, other than log the situation.
+			 */
+			// RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+			logger.warn("Attempt to disable consumer threads when current state is {}",
+					RabbitMQConsumerController.state);
 		} else {
+			/*
+			 * This does not necessarily mean there is a problem, but it is 
+			 * probably good to know in case additional states are introduced. 
+			 */
 			logger.warn("Attempt to disable consumer threads when current state is {}",
 					RabbitMQConsumerController.state);
 		}
@@ -598,8 +626,7 @@ public class RabbitMQProducerController {
 				logger.info("Waiting for RabbitMQ producer thread to terminate...");
 				try {
 					rabbitMQProducerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
-					logger.info("RabbitMQ producer thread terminated or timed out after {} ms",
-							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ producer thread terminated");
 				} catch (InterruptedException e) {
 				}
 			}
@@ -611,8 +638,7 @@ public class RabbitMQProducerController {
 					logger.info("Waiting for RabbitMQ producer thread {} to terminate...", threadIndex);
 					try {
 						rabbitMQProducerThreads.get(threadIndex).join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
-						logger.info("RabbitMQ producer thread {} terminated or timed out after {} ms", threadIndex,
-								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ producer thread {} terminated", threadIndex);
 					} catch (InterruptedException e) {
 					}
 				}
@@ -641,8 +667,7 @@ public class RabbitMQProducerController {
 				logger.info("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
 					RabbitMQConsumerController.rabbitMQConsumerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
-					logger.info("RabbitMQ consumer thread terminated or timed out after {} ms",
-							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ consumer thread terminated");
 				} catch (InterruptedException e) {
 				}
 			}
@@ -655,8 +680,7 @@ public class RabbitMQProducerController {
 					try {
 						RabbitMQConsumerController.rabbitMQConsumerThreads.get(threadIndex).join(
 								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
-						logger.info("RabbitMQ consumer thread {} terminated or timed out after {} ms", threadIndex,
-								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ consumer thread {} terminated", threadIndex);
 					} catch (InterruptedException e) {
 					}
 				}

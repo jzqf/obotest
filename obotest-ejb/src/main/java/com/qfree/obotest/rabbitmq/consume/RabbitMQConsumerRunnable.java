@@ -37,7 +37,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	private static final long LONG_SLEEP_MS = 1000;
 
 	/*
-	 * To signal that these consumer threads should terminat, another thread
+	 * To signal that these consumer threads should terminate, another thread
 	 * will set:
 	 * 
 	 * RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED 
@@ -51,7 +51,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * avoid getting stuck in an endless loop in the unlikely case that the
 	 * conditions being tested for are *never* satisfied.
 	 */
-	private static final long MAX_WAIT_BEFORE_TERMINATION_MS =60000;  // 60s
+	private static final long MAX_WAIT_BEFORE_TERMINATION_MS = 60000;  // 60s
 
 	/**
 	 * When true, message consumption will be disabled. This variable is set 
@@ -83,7 +83,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * endless loop when shutting down the consumer threads.
 	 */
 	private long terminationRequestedTime = 0;
-
 
 	/*
 	 * This constructor is necessary, since this is a stateless session bean,
@@ -125,9 +124,18 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					messageConsumerHelper.configureConsumer();
 					logger.info("Waiting for messages...");
 
-					// These are for testing only. Delete after things work OK.
-					final long NUM_MSGS_TO_CONSUME = 2;
-					long msgs_consumed = 0;
+					//					/*
+					//					 * These are for testing only. Delete after things work OK.
+					//					 * These counters actually count the number of trips through
+					//					 * the "while" loop and the number of times that 
+					//					 * handleNextDelivery() is called. But occasionally a
+					//					 * message will not be consumed (if there are too many
+					//					 * unconfirmed messages or whatever), so these do not 
+					//					 * actually count the number of messages consumed and
+					//					 * produced!
+					//					 */
+					//					final long NUM_MSGS_TO_CONSUME = 1000;
+					//					long msgs_consumed = 0;
 
 					while (true) {
 
@@ -137,12 +145,12 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							int remainingCapacity = RabbitMQProducerController.producerMsgQueue.remainingCapacity();
 							if (throttled_ProducerMsgQueue) {
 								if (remainingCapacity >= QUEUE_REMAINING_CAPACITY_HIGH_WATER) {
-									logger.info("Consumption throttling based on producer queue size is now *off*");
+									logger.debug("Consumption throttling based on producer queue size is now *off*");
 									throttled_ProducerMsgQueue = false;
 								}
 							} else {
 								if (remainingCapacity <= QUEUE_REMAINING_CAPACITY_LOW_WATER) {
-									logger.info("Consumption throttling based on producer queue size is now *on*");
+									logger.debug("Consumption throttling based on producer queue size is now *on*");
 									throttled_ProducerMsgQueue = true;
 								}
 							}
@@ -153,12 +161,12 @@ public class RabbitMQConsumerRunnable implements Runnable {
 											.availablePermits();
 							if (throttled_UnacknowledgedCDIEvents) {
 								if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
-									logger.info("Consumption throttling based on unacknowldeged CDI events is now *off*");
+									logger.debug("Consumption throttling based on unacknowldeged CDI events is now *off*");
 									throttled_UnacknowledgedCDIEvents = false;
 								}
 							} else {
 								if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
-									logger.info("Consumption throttling based on unacknowldeged CDI events is now *on*");
+									logger.debug("Consumption throttling based on unacknowldeged CDI events is now *on*");
 									throttled_UnacknowledgedCDIEvents = true;
 								}
 							}
@@ -186,9 +194,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 							if (!throttled) {
 
-								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
-									msgs_consumed += 1;
-									logger.info("\n\nAbout to consume message...\n");
+								//								if (msgs_consumed < NUM_MSGS_TO_CONSUME) {
+								//									msgs_consumed += 1;
+								//									//logger.info("\n\nAbout to consume message...\n");
 
 									try {
 										messageConsumerHelper.handleNextDelivery();
@@ -236,16 +244,18 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										logger.error("Unexpected exception caught:", e);
 									}
 
-								} else {
-									try {
-										logger.info("Sleeping 2s...");
-										Thread.sleep(2 * LONG_SLEEP_MS);
-									} catch (InterruptedException e) {
-									}
-								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
+								//								} else {
+								//									try {
+								//										logger.info("Sleeping 2s...");
+								//										Thread.sleep(2 * LONG_SLEEP_MS);
+								//									} catch (InterruptedException e) {
+								//									}
+								//								}  // if(msgs_consumed<NUM_MSGS_TO_CONSUME)
 
 							}
 						}
+
+						logger.debug("RabbitMQConsumerController.state = {}", RabbitMQConsumerController.state);
 
 						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
 								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
@@ -260,7 +270,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 						sleepALittleBit(throttled, acknowledgementQueue);
 
 						if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.STOPPED) {
-							if (stoppingNowIsOK(acknowledgementQueue)) {
+							if (isOKToStop(acknowledgementQueue)) {
 								break;
 							}
 						} else {
@@ -383,7 +393,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * 
 	 * @return true if it is OK for the current consumer thread to terminate.
 	 */
-	private boolean stoppingNowIsOK(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+	private boolean isOKToStop(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		boolean stop = false;
 		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
 				|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
@@ -423,7 +433,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				 *   2.	There are no message handlers still running
 				 *   3. The producer message queue is empty.
 				 * 
-				 * These checks are a similar to those made in
+				 * These checks are similar to those made in
 				 * RabbitMQProducerController.shutdown(), but here I do not
 				 * wait if the condition is not true and neither to I try to
 				 * force the producer threads to run.
@@ -471,7 +481,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				stop = true;
 			}
 		} else {
-			logger.info("Request to stop detected. This thread will terminate.");
+			logger.info("Request to stop detected. This thread will be allowed terminate.");
 			stop = true;
 		}
 		return stop;

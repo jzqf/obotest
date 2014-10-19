@@ -1,6 +1,9 @@
 package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
@@ -19,6 +22,7 @@ import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
+import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -82,6 +86,39 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	@PassageQualifier
 	Event<PassageTest1Event> passageEvent;
 
+	/*
+	 * This set was used to detect the situation where it appears that there
+	 * are consumed messages that never will be acknowledged with the 
+	 * AFTER_PUBLISHED_CONFIRMED acknowledgement algorithm. It does this by
+	 * holding the delivery tags of all messages consumed in this thread. As
+	 * messages are acknowledged, their delivery tags are removed from this set.
+	 * Since, this is a sorted set, it is easy to monitor the minimum and 
+	 * maximum values of the delivery keys in this set. If this difference gets
+	 * too large, say over 100, then it is quite likely that the messages that
+	 * correspond to the small delivery tag values will *never* be acknowledged.
+	 * 
+	 * Under normal operation, where this problem does not occur, there will
+	 * normally be up to perhaps 20 delivery tags in this set and their values
+	 * should always be increasing because they should correspond to messages
+	 * that were very recently consumed, but which are not yet acknowledged. 
+	 * If a problem occurs in the AFTER_PUBLISHED_CONFIRMED algorithm (e.g., one
+	 * of the producer threads terminates unexpectedly), delivery tag 
+	 * acknowledgement data will be lost and even though the producer thread 
+	 * will be restarted by RabbitMQProducerController.heartBeat(), the 
+	 * messages corresponding to the lost acknowledgement data will never be
+	 * acknowledged in the consumer threads where they were originally consumed.
+	 * 
+	 * This technique was used to discover that 
+	 * RabbitMQProducerConfirmListener.handleAck(...) was unexpectedly throwing 
+	 * a java.util.ConcurrentModificationException because access to a data
+	 * structure was not appropriately synchronized.
+	 * 
+	 * This set should no longer be needed, but rather than deleting it and all
+	 * code that deals with it, the code is just commented out in case we 
+	 * ever need to use it again. 
+	 */
+	private final SortedSet<Long> unackedDeliveryKeySet = Collections.synchronizedSortedSet(new TreeSet<Long>());
+
 	public RabbitMQConsumerHelperPassageTest1() {
 		/*
 		 * This will be the name of the subclass *if* an a an instance of a 
@@ -141,21 +178,40 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 * In this way, there should always one message at our end waiting
 			 * to be consumed.
 			 * 
-			 * TODO This parameter should be tuned for the types of messages used
-			 *      in production, as well as the amount of processing done on
-			 *      each message.
+			 * TODO This parameter should be tuned for the types of messages 
+			 *      used in production, as well as the amount of processing done
+			 *      on each message.
 			 */
 			channel.basicQos(10);
 		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
 			/*
-			 * The explanation here is similar to that for the algorithm AFTER_PUBLISHED
+			 * The explanation here is similar to that for the algorithm 
+			 * AFTER_PUBLISHED.
 			 */
 			channel.basicQos(10);
 		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 			/*
-			 * The explanation here is similar to that for the algorithm AFTER_PUBLISHED
+			 * The explanation here is similar to that for the algorithm 
+			 * AFTER_PUBLISHED. However, the total "round-trip time" for an 
+			 * acknowledgement to be made for a consumed message is considerably
+			 * longer for this algorithm than that for the AFTER_PUBLISHED
+			 * algorithm since it is necessary here to wait for a confirm to be 
+			 * reported by the broker that receives the published messages. 
+			 * 
+			 * It is reasonable to assume that this round-trip time will be 
+			 * comparable than for the AFTER_PUBLISHED_TX algorithm. However, 
+			 * unlike with the AFTER_PUBLISHED_TX algorithm, in this 
+			 * AFTER_PUBLISHED_CONFIRMED algorithm we are able to continue 
+			 * consuming messages while we wait for confirmations from the
+			 * broker that receives the published messages. This means that we
+			 * can improve the message throughput for this algorithm by 
+			 * increasing the maximum number of unconfirmed messages on each
+			 * RabbitMQ channel used for message consumption. That is why the 
+			 * value specified here in channel.basicQos(...) is larger than for
+			 * the other acknowledgment algorithms. However, it still needs to
+			 * be optimized for each particular implementation.
 			 */
-			channel.basicQos(10);
+			channel.basicQos(40);	// Optimize QOS for each implementation
 		} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
 			channel.basicQos(1);
 		} else {
@@ -218,6 +274,8 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 			}
 
+			unackedDeliveryKeySet.add(deliveryTag);
+
 			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
 				channel.basicAck(deliveryTag, false);
 			}
@@ -247,19 +305,41 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		try {
 			if (!rabbitMQMsgAck.isRejected()) {
 				// Acknowledge the message, and only this message.
-				logger.debug("Acking message: {}", rabbitMQMsgAck);
+				logger.debug("Acking delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
+				//logger.debug("Acking message: {}", rabbitMQMsgAck);
 				channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
+
+				Long deliveryTag = rabbitMQMsgAck.getDeliveryTag();
+				if (unackedDeliveryKeySet.contains(deliveryTag)) {
+					unackedDeliveryKeySet.remove(deliveryTag);
+				} else {
+					logger.warn("deliveryTag {} not found in unackedDeliveryKeySet!", deliveryTag);
+				}
+				logger.info("unackedDeliveryKeySet = {}", unackedDeliveryKeySet);
+				if (!unackedDeliveryKeySet.isEmpty()) {
+					if (unackedDeliveryKeySet.last() - unackedDeliveryKeySet.first() > 100) {
+						// It seems likely that there are messages that will never be acknowledged!
+						logger.info("Problem detected!" +
+								" It looks like there are messages that will *never* be acknowledged." + ""
+								+ " Disabling the consumer threads...");
+						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+					}
+				}
+
 			} else {
 				/*
 				 * Reject the message, and request that it be requeued or not 
 				 * according to the value of rabbitMQMsgAck.isRequeueRejectedMsg().
 				 */
-				logger.debug("Nacking message: {}", rabbitMQMsgAck);
+				logger.warn("Nacking delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
+				//logger.warn("Nacking message: {}", rabbitMQMsgAck);
 				channel.basicNack(rabbitMQMsgAck.getDeliveryTag(), false, rabbitMQMsgAck.isRequeueRejectedMsg());
 			}
 		} catch (IOException e) {
-			// This is very unlikely.
-			logger.warn("Exception thrown acknowledging a RabbitMQ message.", e);
+			// This is very unlikely, but:
+			//TODO What should I do with the rabbitMQMsgAck message here?
+			logger.error("Exception thrown acknowledging a RabbitMQ message. rabbitMQMsgAck = {}, exception = {}",
+					rabbitMQMsgAck, e);
 		}
 	}
 
