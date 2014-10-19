@@ -87,10 +87,10 @@ public class RabbitMQConsumerController {
 	};
 
 	public enum AckAlgorithms {
-		AFTER_RECEIVED, AFTER_PUBLISHED, AFTER_PUBLISHED_TX, AFTER_PUBLISHED_CONFIRMED
+		AFTER_RECEIVED, AFTER_PUBLISHED, AFTER_PUBLISHED_CONFIRMED, AFTER_PUBLISHED_TX
 	};
 
-	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_PUBLISHED_TX;
+	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_PUBLISHED_CONFIRMED;
 
 	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
@@ -332,6 +332,16 @@ public class RabbitMQConsumerController {
 	@Lock(LockType.WRITE)
 	private void heartBeat() {
 
+		/*
+		 * If the consumer threads are currently *not* running, we could also 
+		 * start them if the current state is DISABLED (i.e., not only if it is 
+		 * RUNNING). This would be so that it is possible to start these threads
+		 * in an initially DISABLE state. However, this application does not 
+		 * currently require this functionality, so I have not enabled it here.
+		 * Perhaps in the future this might be appropriate.
+		 */
+		//		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING
+		//				|| RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.DISABLED) {
 		if (RabbitMQConsumerController.state == RabbitMQConsumerControllerStates.RUNNING) {
 			if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 				logger.trace("Checking if RabbitMQ consumer thread is running...");
@@ -415,8 +425,7 @@ public class RabbitMQConsumerController {
 				logger.info("Waiting for RabbitMQ consumer thread to terminate...");
 				try {
 					rabbitMQConsumerThread.join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
-					logger.info("RabbitMQ consumer thread terminated or timed out after {} ms",
-							MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+					logger.info("RabbitMQ consumer thread terminated");
 				} catch (InterruptedException e) {
 				}
 			}
@@ -428,8 +437,7 @@ public class RabbitMQConsumerController {
 					logger.info("Waiting for RabbitMQ consumer thread {} to terminate...", threadIndex);
 					try {
 						rabbitMQConsumerThreads.get(threadIndex).join(MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
-						logger.info("RabbitMQ consumer thread {} terminated or timed out after {} ms", threadIndex,
-								MAX_WAIT_BEFORE_THREAD_TERMINATION_MS);
+						logger.info("RabbitMQ consumer thread {} terminated", threadIndex);
 					} catch (InterruptedException e) {
 					}
 				}

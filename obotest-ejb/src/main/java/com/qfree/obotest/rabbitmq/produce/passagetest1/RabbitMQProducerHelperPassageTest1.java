@@ -1,7 +1,6 @@
 package com.qfree.obotest.rabbitmq.produce.passagetest1;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
 import javax.enterprise.event.Event;
@@ -12,11 +11,6 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
-import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
-import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
-import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -107,12 +101,6 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	public void openChannel() throws IOException {
 		channel = connection.createChannel();
 		channel.queueDeclare(PASSAGE_QUEUE_NAME, true, false, false, null);
-		if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
-			/*
-			 * Enable TX mode on this channel.
-			 */
-			channel.txSelect();
-		}
 	}
 
 	@Override
@@ -122,64 +110,25 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 		}
 	}
 
-	//TODO Eliminate this method if not useful.
-	//	@Override
-	//	public void configureProducer(...) {
-	//		...;
-	//	}
+	@Override
+	public Channel getChannel() {
+		return channel;
+	}
 
 	@Override
-	public void handlePublish() throws InterruptedException, IOException {
-
-		RabbitMQMsgEnvelope rabbitMQMsgEnvelope = RabbitMQProducerController.producerMsgQueue.poll(
-				RABBITMQ_PRODUCER_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-		if (rabbitMQMsgEnvelope != null) {
-
+	public void handlePublish(byte[] passageBytes) throws IOException {
 			/*
-			 * Extract from rabbitMQMsgEnvelope both the outgoing serialized 
-			 * protobuf message to be published here as well as the 
-			 * RabbitMQMsgAck object that is associated with the original 
-			 * consumed RabbitMQ message (containing its delivery tag and other 
-			 * details).
+			 * TODO Should I also pass mandatory=true here? This is to ensure that 
+			 *      the message gets into at least one queue. If the server cannot 
+			 *      do this, it will send the message's deliveryTag (sequence number) 
+			 *      back via the installed ReturnListener.  I need to read the 
+			 *      section "When will messages be confirmed?" of the document:
+			 *      https://www.rabbitmq.com/confirms.html to really understand what
+			 *      this means and to ensure that I am handling this situation 
+			 *      correctly (if/after I start using the "mandatory" flag). Of
+			 *      course, I will also have to implement a ReturnListener as well.
 			 */
-			byte[] passageBytes = rabbitMQMsgEnvelope.getMessage();
-			RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
-
-			logger.debug("Publishing RabbitMQ passage message [{} bytes]...", passageBytes.length);
-			//			logger.info("[{}]: Publishing RabbitMQ passage message [{} bytes]...", subClassName,
-			//					passageBytes.length);
-
-			//TODO Implement "PUBLISHER CONFIRMS" !!!!!!!!!
 			channel.basicPublish("", PASSAGE_QUEUE_NAME, MessageProperties.PERSISTENT_BASIC, passageBytes);
-
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
-				/*
-				 * This will block here until the RabittMQ broker that just received
-				 * the published message has written the message to disk and performed
-				 * some sort of fsync(), which takes a significant time to complete.
-				 * Therefore, this acknowledgement algorithm, while very safe, will 
-				 * probably be too slow in practice.
-				 */
-				channel.txCommit();
-			}
-
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
-				rabbitMQMsgAck.queueAck();
-			}
-
-		} else {
-			/*
-			 * This just means that there were no messages in the queue to
-			 * publish after waiting the timeout period. This in perfectly 
-			 * normal. The timeout is implemented so that the calling thread
-			 * can check whether there has been a request made for it to 
-			 * terminate or whatever, even if this thread is not 
-			 * interrupted. 
-			 */
-			//			logger.trace("q={} - After poll: No message.",
-			//					RabbitMQProducerController.producerMsgQueue.remainingCapacity());
-		}
 	}
 
 	@PreDestroy
