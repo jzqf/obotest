@@ -2,7 +2,6 @@ package com.qfree.obotest.rabbitmq.produce;
 
 import java.io.IOException;
 import java.util.SortedMap;
-import java.util.SortedSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,15 +15,8 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 
 	private final SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms;
 
-	/*
-	 * DELETE THIS SET!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	 */
-	private final SortedSet<Long> pendingPublisherConfirmsSet;
-
-	public RabbitMQProducerConfirmListener(SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms,
-			SortedSet<Long> pendingPublisherConfirmsSet) {
+	public RabbitMQProducerConfirmListener(SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms) {
 		this.pendingPublisherConfirms = pendingPublisherConfirms;
-		this.pendingPublisherConfirmsSet = pendingPublisherConfirmsSet;
 	}
 
 	@Override
@@ -84,14 +76,6 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 						rabbitMQMsgAck.queueAck();
 					}
 
-					for (Long delivTag : confirmedMessages.keySet()) {
-						if (pendingPublisherConfirmsSet.contains(delivTag)) {
-							pendingPublisherConfirmsSet.remove(delivTag);
-						} else {
-							logger.warn("delivTag {} not found in pendingPublisherConfirmsSet!", delivTag);
-						}
-					}
-
 					/*
 					 * Remove those elements just processed from the map
 					 * "pendingPublisherConfirms".
@@ -115,12 +99,6 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 				 * "pendingPublisherConfirms".
 				 */
 				pendingPublisherConfirms.remove(deliveryTag);
-
-				if (pendingPublisherConfirmsSet.contains(deliveryTag)) {
-					pendingPublisherConfirmsSet.remove(deliveryTag);
-				} else {
-					logger.warn("deliveryTag {} not found in pendingPublisherConfirmsSet!", deliveryTag);
-				}
 
 			}
 

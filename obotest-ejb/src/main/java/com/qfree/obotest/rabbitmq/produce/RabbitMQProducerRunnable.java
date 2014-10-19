@@ -3,9 +3,7 @@ package com.qfree.obotest.rabbitmq.produce;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.SortedMap;
-import java.util.SortedSet;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -121,8 +119,6 @@ public class RabbitMQProducerRunnable implements Runnable {
 		SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms = Collections
 				.synchronizedSortedMap(new TreeMap<Long, RabbitMQMsgAck>());
 
-		SortedSet<Long> pendingPublisherConfirmsSet = Collections.synchronizedSortedSet(new TreeSet<Long>());
-
 		try {
 			messageProducerHelper.openConnection();
 			try {
@@ -148,8 +144,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 					 * messages and does whatever is necessary to persist them
 					 * so that they will not be lost if that broker dies.
 					 */
-					channel.addConfirmListener(new RabbitMQProducerConfirmListener(pendingPublisherConfirms,
-							pendingPublisherConfirmsSet));
+					channel.addConfirmListener(new RabbitMQProducerConfirmListener(pendingPublisherConfirms));
 
 					/*
 					 * This listener is triggered by the broker for failed 
@@ -221,7 +216,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 										|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
 									/*
 									 * Enter rabbitMQMsgAck into the acknowledgment queue where it will
-									 * be processed by the apropriate consumer thread.
+									 * be processed by the appropriate consumer thread.
 									 */
 									rabbitMQMsgAck.queueAck();
 								}
@@ -235,7 +230,6 @@ public class RabbitMQProducerRunnable implements Runnable {
 											+ "nextPublishSeqNo = {}, rabbitMQMsgAck = {}",
 											nextPublishSeqNo, rabbitMQMsgAck);
 									pendingPublisherConfirms.put(nextPublishSeqNo, rabbitMQMsgAck);
-									pendingPublisherConfirmsSet.add(nextPublishSeqNo);
 								}
 
 							} catch (IOException e) {
@@ -324,8 +318,6 @@ public class RabbitMQProducerRunnable implements Runnable {
 		}
 
 		logger.debug("pendingPublisherConfirms = {}", pendingPublisherConfirms);
-		logger.debug("pendingPublisherConfirmsSet = {}", pendingPublisherConfirmsSet);
-
 		logger.info("Thread exiting");
 
 	}

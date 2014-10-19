@@ -1,9 +1,6 @@
 package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
@@ -22,7 +19,6 @@ import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -117,7 +113,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	 * code that deals with it, the code is just commented out in case we 
 	 * ever need to use it again. 
 	 */
-	private final SortedSet<Long> unackedDeliveryKeySet = Collections.synchronizedSortedSet(new TreeSet<Long>());
+	//	private final SortedSet<Long> unackedDeliveryKeySet = Collections.synchronizedSortedSet(new TreeSet<Long>());
 
 	public RabbitMQConsumerHelperPassageTest1() {
 		/*
@@ -274,7 +270,7 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 			}
 
-			unackedDeliveryKeySet.add(deliveryTag);
+			//			unackedDeliveryKeySet.add(deliveryTag);
 
 			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
 				channel.basicAck(deliveryTag, false);
@@ -309,22 +305,22 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				//logger.debug("Acking message: {}", rabbitMQMsgAck);
 				channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
 
-				Long deliveryTag = rabbitMQMsgAck.getDeliveryTag();
-				if (unackedDeliveryKeySet.contains(deliveryTag)) {
-					unackedDeliveryKeySet.remove(deliveryTag);
-				} else {
-					logger.warn("deliveryTag {} not found in unackedDeliveryKeySet!", deliveryTag);
-				}
-				logger.info("unackedDeliveryKeySet = {}", unackedDeliveryKeySet);
-				if (!unackedDeliveryKeySet.isEmpty()) {
-					if (unackedDeliveryKeySet.last() - unackedDeliveryKeySet.first() > 100) {
-						// It seems likely that there are messages that will never be acknowledged!
-						logger.info("Problem detected!" +
-								" It looks like there are messages that will *never* be acknowledged." + ""
-								+ " Disabling the consumer threads...");
-						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
-					}
-				}
+				//				Long deliveryTag = rabbitMQMsgAck.getDeliveryTag();
+				//				if (unackedDeliveryKeySet.contains(deliveryTag)) {
+				//					unackedDeliveryKeySet.remove(deliveryTag);
+				//				} else {
+				//					logger.warn("deliveryTag {} not found in unackedDeliveryKeySet!", deliveryTag);
+				//				}
+				//				logger.info("unackedDeliveryKeySet = {}", unackedDeliveryKeySet);
+				//				if (!unackedDeliveryKeySet.isEmpty()) {
+				//					if (unackedDeliveryKeySet.last() - unackedDeliveryKeySet.first() > 100) {
+				//						// It seems likely that there are messages that will never be acknowledged!
+				//						logger.info("Problem detected!" +
+				//								" It looks like there are messages that will *never* be acknowledged." + ""
+				//								+ " Disabling the consumer threads...");
+				//						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
+				//					}
+				//				}
 
 			} else {
 				/*
