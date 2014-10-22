@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
-import javax.ejb.Lock;
-import javax.ejb.LockType;
 import javax.enterprise.event.Event;
 import javax.inject.Inject;
 
@@ -235,18 +233,23 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	}
 
 	public void handleNextDelivery() throws InterruptedException, IOException, InvalidProtocolBufferException {
+		//                                  ObserverException, IllegalArgumentException, 
 
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
 			long deliveryTag = delivery.getEnvelope().getDeliveryTag();
 
+			//TODO passageBytes --> messageBytes?
 			byte[] passageBytes = delivery.getBody();
 
 			logger.debug("Received passage message: deliveryTag={}, {} bytes", deliveryTag, passageBytes.length);
-			//			logger.info("[{}]: Received message: {} bytes", subClassName, passageBytes.length);
 
 			if (false) {
+				/*
+				 * TODO Use this case to test directly calling a method of an injected class.
+				 *      Test both asynchronous and synchronous calls.
+				 */
 
 				/*
 				 * Process the message synchronously, here in this thread.
@@ -255,18 +258,81 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
 				 * TODO WE need to enter an element in the acknowledgement queue if mode=AFTER_SEND
 				 */
-				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
-				String filename = passage.getImageName();
-				byte[] imageBytes = passage.getImage().toByteArray();
-				logger.debug("[{}]:     Image name = '{}' ({} bytes)", subClassName, filename, imageBytes.length);
 
 			} else {
+
+				/*
+				 * TOD Create two versions of the @Observes method, each with a different qualifier.
+				 *     The names of these qualifiers can be the same, but end with either "_sync" or
+				 *     "_async". As these names indicate, the one ending with "_async" should be
+				 *     annotated with @Asynchronous. We can use a configuration parameter to select
+				 *     which method to call. The "_async" method can just call the "_sync" method
+				 *     to avoid as much code duplication as possible.
+				 */
 
 				/*
 				 * Process the message asynchronously in another thread that 
 				 * receives a CDI event that is sent from this thread.
 				 */
-				this.firePassageEvent(passageBytes, deliveryTag);
+				//				this.firePassageEvent(passageBytes, deliveryTag);
+
+				RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
+
+				try {
+
+					PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
+					String filename = passage.getImageName();
+					byte[] imageBytes = passage.getImage().toByteArray();
+
+					PassageTest1Event passagePayload = new PassageTest1Event();
+					passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
+					passagePayload.setImageName(filename);
+					passagePayload.setImageBytes(imageBytes);
+
+					if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
+						logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName,
+								passagePayload,
+								RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
+						try {
+							passageEvent.fire(passagePayload);
+						} catch (Throwable e) {
+							logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+
+							/*
+							 * If an exception was thrown firing a CDI event (I don't
+							 * know if this is even possible, we release the permit just
+							 * acquired because there will probably be no session bean 
+							 * to receive the event that would normally do this. 
+							 */
+							RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+
+							if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+								rabbitMQMsgAck.setRejected(true);
+								rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
+								acknowledgeMsg(rabbitMQMsgAck);
+							}
+						}
+						logger.debug("[{}]: Returned from firing event", subClassName);
+					} else {
+						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+							rabbitMQMsgAck.setRejected(true);
+							rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
+							acknowledgeMsg(rabbitMQMsgAck);
+							logger.warn("Permit not acquired for CDI event to be sent.");
+						} else {
+							logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
+						}
+					}
+
+				} catch (InvalidProtocolBufferException e) {
+					logger.error("[{}]: An InvalidProtocolBufferException was thrown. The message will be lost!",
+							subClassName);
+					logger.error("Exception details:", e);
+				}
 
 			}
 
@@ -339,91 +405,89 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		}
 	}
 
-	/*
-	 * By making this method (as well as the method that receives the fired 
-	 * event) asynchronous, the event mechanism becomes a sort of 
-	 * "fire-and-forget" call. If we do annotate this method here with 
-	 * @Asynchronous, but not the receiving (@Observes) method, then the Java EE
-	 * container will use a pool of threads to fire many events (one in each 
-	 * thread), but each thread will wait for the event to be processed before 
-	 * proceeding, so it isn't fully asynchronous and nothing is gained. It is
-	 * important, therefore, to just follow the rule that @Asynchronous be used 
-	 * on both the method that fires the event as well as the method that 
-	 * receives (@Observes) the event.
-	 * 
-	 * Note:  Testing seems to show that it is not actually necessary to 
-	 *        annotate with @Asynchronous this method here that does the firing,
-	 *        i.e., the key thing is to annotate the method that receives
-	 *        (observes) the event. But for the time being I will do this until 
-	 *        a reason becomes apparent for not doing it.
-	 * 
-	 * TODO Investigate if/how we can get information on how the event was processed by the receiver.
-	 * 
-	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method????!!!
-	 * 
-	 */
-	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. TEST WITH AND WIHTOUT THIS @Asynchronous
-	//	@Asynchronous
-	@Lock(LockType.WRITE)
-	private void firePassageEvent(byte[] passageBytes, long deliveryTag) {
-
-		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
-
-		try {
-
-			PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
-			String filename = passage.getImageName();
-			byte[] imageBytes = passage.getImage().toByteArray();
-
-			PassageTest1Event passagePayload = new PassageTest1Event();
-			passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
-			passagePayload.setImageName(filename);
-			passagePayload.setImageBytes(imageBytes);
-
-			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
-				logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName, passagePayload,
-						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
-				try {
-					passageEvent.fire(passagePayload);
-				} catch (Throwable e) {
-					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
-
-					/*
-					 * If an exception was thrown firing a CDI event (I don't
-					 * know if this is even possible, we release the permit just
-					 * acquired because there will probably be no session bean 
-					 * to receive the event that would normally do this. 
-					 */
-					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-
-					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-						rabbitMQMsgAck.setRejected(true);
-						rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
-						acknowledgeMsg(rabbitMQMsgAck);
-					}
-				}
-				logger.debug("[{}]: Returned from firing event", subClassName);
-			} else {
-				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-					rabbitMQMsgAck.setRejected(true);
-					rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
-					acknowledgeMsg(rabbitMQMsgAck);
-					logger.warn("Permit not acquired for CDI event to be sent.");
-				} else {
-					logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
-				}
-			}
-
-		} catch (InvalidProtocolBufferException e) {
-			logger.error("[{}]: An InvalidProtocolBufferException was thrown. The message will be lost!", subClassName);
-			logger.error("Exception details:", e);
-		}
-
-	}
+	//	/*
+	//	 * By making this method (as well as the method that receives the fired 
+	//	 * event) asynchronous, the event mechanism becomes a sort of 
+	//	 * "fire-and-forget" call. If we do annotate this method here with 
+	//	 * @Asynchronous, but not the receiving (@Observes) method, then the Java EE
+	//	 * container will use a pool of threads to fire many events (one in each 
+	//	 * thread), but each thread will wait for the event to be processed before 
+	//	 * proceeding, so it isn't fully asynchronous and nothing is gained. It is
+	//	 * important, therefore, to just follow the rule that @Asynchronous be used 
+	//	 * on both the method that fires the event as well as the method that 
+	//	 * receives (@Observes) the event.
+	//	 * 
+	//	 * Note:  Testing seems to show that it is not actually necessary to 
+	//	 *        annotate with @Asynchronous this method here that does the firing,
+	//	 *        i.e., the key thing is to annotate the method that receives
+	//	 *        (observes) the event. But for the time being I will do this until 
+	//	 *        a reason becomes apparent for not doing it.
+	//	 * 
+	//	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method????!!!
+	//	 * 
+	//	 */
+	//	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. TEST WITH AND WIHTOUT THIS @Asynchronous
+	//	//	@Asynchronous
+	//	@Lock(LockType.WRITE)
+	//	private void firePassageEvent(byte[] passageBytes, long deliveryTag) {
+	//
+	//		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
+	//
+	//		try {
+	//
+	//			PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(passageBytes);
+	//			String filename = passage.getImageName();
+	//			byte[] imageBytes = passage.getImage().toByteArray();
+	//
+	//			PassageTest1Event passagePayload = new PassageTest1Event();
+	//			passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
+	//			passagePayload.setImageName(filename);
+	//			passagePayload.setImageBytes(imageBytes);
+	//
+	//			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
+	//				logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName, passagePayload,
+	//						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
+	//				try {
+	//					passageEvent.fire(passagePayload);
+	//				} catch (Throwable e) {
+	//					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+	//
+	//					/*
+	//					 * If an exception was thrown firing a CDI event (I don't
+	//					 * know if this is even possible, we release the permit just
+	//					 * acquired because there will probably be no session bean 
+	//					 * to receive the event that would normally do this. 
+	//					 */
+	//					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+	//
+	//					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+	//							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+	//							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+	//						rabbitMQMsgAck.setRejected(true);
+	//						rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
+	//						acknowledgeMsg(rabbitMQMsgAck);
+	//					}
+	//				}
+	//				logger.debug("[{}]: Returned from firing event", subClassName);
+	//			} else {
+	//				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+	//						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+	//						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+	//					rabbitMQMsgAck.setRejected(true);
+	//					rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
+	//					acknowledgeMsg(rabbitMQMsgAck);
+	//					logger.warn("Permit not acquired for CDI event to be sent.");
+	//				} else {
+	//					logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
+	//				}
+	//			}
+	//
+	//		} catch (InvalidProtocolBufferException e) {
+	//			logger.error("[{}]: An InvalidProtocolBufferException was thrown. The message will be lost!", subClassName);
+	//			logger.error("Exception details:", e);
+	//		}
+	//
+	//	}
 
 	@PreDestroy
 	public void terminate() {

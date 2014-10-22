@@ -19,8 +19,8 @@ import com.rabbitmq.client.ShutdownSignalException;
  * This class is instantiated explicitly with "new"; hence, it cannot be managed
  * by the Java EE application container. Therefore, it makes no sense to use
  * the annotations, @Stateless, or @LocalBean here. For the same reason it is 
- * not possible to use dependency injection so the @EJB annotation cannot be 
- * used either.
+ * not possible to use dependency injection so the @EJB & @Inject annotations 
+ * cannot be used either.
  */
 //@Stateless
 //@LocalBean
@@ -208,8 +208,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										* in handleNextDelivery(); therefore, there is no need to nack/reject
 										* any message.
 										*/
-										logger.error("InvalidProtocolBufferException received:", e);
-										//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PRODUCED=
+									logger.error("InvalidProtocolBufferException received:", e);
+									//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PUBLISHED
 									} catch (IOException e) {
 										/*
 										* This exception can be thrown when channel.basicAck is executed in
