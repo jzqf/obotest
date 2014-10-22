@@ -1,10 +1,10 @@
 package com.qfree.obotest.rabbitmq.consume.passagetest1;
 
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
 
 import javax.annotation.PreDestroy;
 import javax.enterprise.event.Event;
+import javax.enterprise.event.ObserverException;
 import javax.inject.Inject;
 
 import org.slf4j.Logger;
@@ -22,8 +22,10 @@ import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import com.rabbitmq.client.ConsumerCancelledException;
 import com.rabbitmq.client.QueueingConsumer;
 //import com.qfree.obotest.eventsender.PassageProtos.Passage;
+import com.rabbitmq.client.ShutdownSignalException;
 
 /*
  * This class is used as a base class for helper singleton EJBs (one for each 
@@ -70,12 +72,12 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private Channel channel = null;
 	private QueueingConsumer consumer = null;
 
-	/*
-	 * This queue holds the RabbitMQ delivery tags and other details for 
-	 * messages that are processed in other threads but which must be 
-	 * acked/nacked in this consumer thread.
-	 */
-	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
+	//	/*
+	//	 * This queue holds the RabbitMQ delivery tags and other details for 
+	//	 * messages that are processed in other threads but which must be 
+	//	 * acked/Nacked in this consumer thread.
+	//	 */
+	//	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
 
     @Inject
 	@PassageQualifier
@@ -238,8 +240,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	}
 
 	public void handleNextDelivery(RabbitMQMsgEnvelope rabbitMQMsgEnvelope) throws
-			InterruptedException, IOException, InvalidProtocolBufferException {
-		//                                  ObserverException, IllegalArgumentException, 
+			InterruptedException, ShutdownSignalException, ConsumerCancelledException,
+			ObserverException, IllegalArgumentException,
+			InvalidProtocolBufferException {
+		//    , IOException                               
 
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
@@ -298,31 +302,30 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 					passagePayload.setImageBytes(imageBytes);
 
 					//					if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
-						logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName,
-								passagePayload,
-								RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
-						try {
-							passageEvent.fire(passagePayload);
-						} catch (Throwable e) {
-							logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
-
-							/*
-							 * If an exception was thrown firing a CDI event (I don't
-							 * know if this is even possible, we release the permit just
-							 * acquired because there will probably be no session bean 
-							 * to receive the event that would normally do this. 
-							 */
-							RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-
-							//							if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-							//									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-							//									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-							//								rabbitMQMsgAck.setRejected(true);
-							//								rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
-							//								acknowledgeMsg(rabbitMQMsgAck);
-							//							}
-						}
-						logger.debug("[{}]: Returned from firing event", subClassName);
+					logger.debug("Firing CDI event for {}, UnackedAvailPermits={}", passagePayload,
+							RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
+					//						try {
+					passageEvent.fire(passagePayload);
+					//						} catch (Throwable e) {
+					//							logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
+					//
+					//							/*
+					//							 * If an exception was thrown firing a CDI event (I don't
+					//							 * know if this is even possible, we release the permit just
+					//							 * acquired because there will probably be no session bean 
+					//							 * to receive the event that would normally do this. 
+					//							 */
+					//							RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+					//
+					//							//							if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+					//							//									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+					//							//									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+					//							//								rabbitMQMsgAck.setRejected(true);
+					//							//								rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
+					//							//								acknowledgeMsg(rabbitMQMsgAck);
+					//							//							}
+					//						}
+					logger.debug("[{}]: Returned from firing event", subClassName);
 					//					} else {
 					//						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
 					//								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX

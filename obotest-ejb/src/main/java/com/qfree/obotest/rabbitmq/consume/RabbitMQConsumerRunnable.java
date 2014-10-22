@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import javax.enterprise.event.ObserverException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -258,9 +260,17 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										}
 
 									} catch (InterruptedException e) {
-										logger.warn("InterruptedException received.");
+
+										/*
+										* If this exception is thrown, it is unlikely that a message was
+										* received in handleNextDelivery(); therefore, there is no need 
+										* to nack/reject any message.
+										*/
+										logger.warn("InterruptedException received.", e);
 										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+
 									} catch (InvalidProtocolBufferException e) {
+
 										/*
 										* If this exception is thrown, no message will have been received
 										* in handleNextDelivery(); therefore, there is no need to nack/reject
@@ -268,15 +278,21 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										*/
 										logger.error("InvalidProtocolBufferException received:", e);
 										//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PUBLISHED
-									} catch (IOException e) {
-										/*
-										* This exception can be thrown when channel.basicAck is executed in
-										* handleNextDelivery(). Since the problem occurs during an 
-										* acknowledgement, it should not be treated by nacking/rejecting
-										* the message, so we do nothing here other than logging.
-										*/
-										logger.error("IOException received:", e);
+										rabbitMQMsgAck.setRejected(true);
+										rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
+										acknowledgeMsg(rabbitMQMsgAck);
+
+										//									} catch (IOException e) {
+										//										/*
+										//										* This exception can be thrown when channel.basicAck is executed in
+										//										* handleNextDelivery(). Since the problem occurs during an 
+										//										* acknowledgement, it should not be treated by nacking/rejecting
+										//										* the message, so we do nothing here other than logging.
+										//										*/
+										//										logger.error("IOException received:", e);
+
 									} catch (ShutdownSignalException e) {
+
 										/*
 										 * I'm not sure under which conditions this exception might be thrown.
 										 * 
@@ -284,10 +300,14 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										 * in handleNextDelivery(); therefore, there is no need to nack/reject
 										 * any message.
 										 */
-										logger.info("ShutdownSignalException received. The RabbitMQ connection will close.");
+										logger.info(
+												"ShutdownSignalException received. The RabbitMQ connection will close.",
+												e);
 										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
 										break;
+
 									} catch (ConsumerCancelledException e) {
+
 										/*
 										 * I'm not sure under which conditions this exception might be thrown.
 										 * 
@@ -295,13 +315,54 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										 * in handleNextDelivery(); therefore, there is no need to nack/reject
 										 * any message.
 										 */
-										logger.info("ConsumerCancelledException received. The RabbitMQ connection will close.");
+										logger.info(
+												"ConsumerCancelledException received. The RabbitMQ connection will close.",
+												e);
 										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
 										break;
+
+									} catch (ObserverException | IllegalArgumentException e) {
+
+										logger.error("An was exception caught, probably from " +
+												"messageConsumerHelper.handleNextDelivery(rabbitMQMsgEnvelope):", e);
+										/*
+										 * These exceptions can be thrown by Event.fire(...) in 
+										 * handleNextDelivery(...). The CDI event will not be received
+										 * by any code, so we need to release the permit here that was
+										 * acquired above.
+										 */
+										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										/*
+										 * The message consumed in handleNextDelivery(...) must be Nacked.
+										 * TODO Should we introduce a configuration parameter for requeuing or dead-lettering the message?
+										 */
+										rabbitMQMsgAck.setRejected(true);
+										rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
+										acknowledgeMsg(rabbitMQMsgAck);
+
+										// } catch (com.qfree.obotest.rabbitmq.RabbitMQMessageNotHandledException e) {
+										//
+										// 	/*
+										// 	 * This custom exception can be implemented if we want to
+										// 	 * be able to signal from handleNextDelivery(...) that 
+										// 	 * something went wrong and the message must be Nacked. We
+										// 	 * also release the semaphore permit that otherwise would not 
+										// 	 * be released.
+										// 	 */
+										// 	RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										// 	rabbitMQMsgAck.setRejected(true);
+										// 	rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
+										// 	acknowledgeMsg(rabbitMQMsgAck);
+
 									} catch (Throwable e) {
+
 										// I'm not sure if/when this will occur.
 										// We log the exception, but do not terminate this thread.
 										logger.error("Unexpected exception caught:", e);
+										rabbitMQMsgAck.setRejected(true);
+										rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
+										acknowledgeMsg(rabbitMQMsgAck);
+
 									}
 
 								} else {
