@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import com.qfree.obotest.event.ImageEvent;
 import com.qfree.obotest.eventlistener.ImageQualifier;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -81,9 +82,13 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		this.subClassName = this.getClass().getSimpleName();
 	}
 
-	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
-		this.acknowledgementQueue = acknowledgementQueue;
+	public Channel getChannel() {
+		return channel;
 	}
+
+	//	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
+	//		this.acknowledgementQueue = acknowledgementQueue;
+	//	}
 
 	public void openConnection() throws IOException {
 
@@ -125,7 +130,7 @@ public abstract class RabbitMQConsumerHelperImageTest implements RabbitMQConsume
 		channel.basicConsume(IMAGE_QUEUE_NAME, false, consumer);
 	}
 
-	public void handleNextDelivery() throws ShutdownSignalException,
+	public void handleNextDelivery(RabbitMQMsgEnvelope rabbitMQMsgEnvelope) throws ShutdownSignalException,
 			ConsumerCancelledException, InterruptedException, IOException {
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {

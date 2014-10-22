@@ -1,10 +1,10 @@
 package com.qfree.obotest.rabbitmq.consume;
 
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
+import com.rabbitmq.client.Channel;
 
 public interface RabbitMQConsumerHelper {
 
@@ -16,12 +16,15 @@ public interface RabbitMQConsumerHelper {
 
 	public void closeChannel() throws IOException;
 
-	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue);
+	public Channel getChannel();
+
+	//	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue);
 
 	public void configureConsumer() throws IOException;
 
-	public void handleNextDelivery() throws InterruptedException, IOException, InvalidProtocolBufferException;
+	public void handleNextDelivery(RabbitMQMsgEnvelope rabbitMQMsgEnvelope) throws
+			InterruptedException, IOException, InvalidProtocolBufferException;
 
-	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck);
+	//	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck);
 
 }
