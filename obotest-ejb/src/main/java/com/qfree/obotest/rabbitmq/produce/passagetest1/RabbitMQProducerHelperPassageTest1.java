@@ -3,14 +3,10 @@ package com.qfree.obotest.rabbitmq.produce.passagetest1;
 import java.io.IOException;
 
 import javax.annotation.PreDestroy;
-import javax.enterprise.event.Event;
-import javax.inject.Inject;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.qfree.obotest.event.PassageTest1Event;
-import com.qfree.obotest.eventlistener.PassageQualifier;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerHelper;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -48,20 +44,16 @@ public abstract class RabbitMQProducerHelperPassageTest1 implements RabbitMQProd
 	 */
 	private static final long RABBITMQ_PRODUCER_TIMEOUT_MS = 1000;
 
+	private Connection connection = null;
+	private Channel channel = null;
+
 	/*
 	 * This field is used to enable the name of the subclass to be logged if 
 	 * this class has been used to create a subclass. This field is set in the
 	 * constructor for this class, but it will be set to the name of the 
-	 * subclass if an instance of a subclass is constructed.
+	 * _subclass_ if an instance of a subclass is constructed.
 	 */
 	private String subClassName = null;
-
-	private Connection connection = null;
-	private Channel channel = null;
-
-    @Inject
-	@PassageQualifier
-	public Event<PassageTest1Event> passageEvent;
 
 	public RabbitMQProducerHelperPassageTest1() {
 		/*

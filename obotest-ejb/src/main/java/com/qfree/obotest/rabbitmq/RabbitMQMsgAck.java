@@ -11,6 +11,8 @@ public class RabbitMQMsgAck {
 
 	private static final Logger logger = LoggerFactory.getLogger(RabbitMQConsumerController.class);
 
+	private static final long NO_MSG_DELIVERY_TAG = -1;	// sentinal value for no message
+
 	/*
 	 * This is the queue into which a RabbitMQMsgAck object should be inserted
 	 * if we are in "acknowledge after send" mode. There is one such queue for
@@ -19,7 +21,7 @@ public class RabbitMQMsgAck {
 	 * which the message was originally consumed.
 	 */
 	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
-	private long deliveryTag;
+	private long deliveryTag = NO_MSG_DELIVERY_TAG;
 	/**
 	 * If false, the message will be acked.
 	 * If true, the message will be nacked.
@@ -35,11 +37,16 @@ public class RabbitMQMsgAck {
 	 */
 	private boolean requeueRejectedMsg = true;
 
-	public RabbitMQMsgAck(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue, long deliveryTag) {
+	public RabbitMQMsgAck(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
 		super();
 		this.acknowledgementQueue = acknowledgementQueue;
-		this.deliveryTag = deliveryTag;
 	}
+
+	//	public RabbitMQMsgAck(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue, long deliveryTag) {
+	//		super();
+	//		this.acknowledgementQueue = acknowledgementQueue;
+	//		this.deliveryTag = deliveryTag;
+	//	}
 
 	public BlockingQueue<RabbitMQMsgAck> getAcknowledgementQueue() {
 		return acknowledgementQueue;
@@ -71,6 +78,10 @@ public class RabbitMQMsgAck {
 
 	public void setRequeueRejectedMsg(boolean requeueRejectedMsg) {
 		this.requeueRejectedMsg = requeueRejectedMsg;
+	}
+
+	public boolean hasMessage() {
+		return deliveryTag != NO_MSG_DELIVERY_TAG;
 	}
 
 	public void queueAck() {

@@ -17,8 +17,6 @@ import javax.ejb.LockType;
 import javax.ejb.Schedule;
 import javax.ejb.Singleton;
 import javax.ejb.Startup;
-import javax.ejb.Timer;
-import javax.ejb.TimerConfig;
 import javax.ejb.TimerService;
 import javax.enterprise.concurrent.ManagedThreadFactory;
 import javax.inject.Inject;
@@ -234,11 +232,16 @@ public class RabbitMQConsumerController {
 		 */
 		Thread.setDefaultUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler());
 
-		logger.info("Setting timer to trigger call to start() in {} ms...",
-				DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS);
-		@SuppressWarnings("unused")
-		Timer timer =
-				timerService.createSingleActionTimer(DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS, new TimerConfig());
+		//		/*
+		//		 * If this timer is used, uncomment the @Timeout annotation below;
+		//		 * otherwise, there are java.lang.NullPointerException exceptions
+		//		 * thrown in GlassFish's server.log.
+		//		 */
+		//		logger.info("Setting timer to trigger call to start() in {} ms...",
+		//				DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS);
+		//		@SuppressWarnings("unused")
+		//		Timer timer =
+		//				timerService.createSingleActionTimer(DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS, new TimerConfig());
 
 		if (NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 			/*
