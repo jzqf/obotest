@@ -11,8 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.qfree.obotest.event.PassageTest1Event;
-import com.qfree.obotest.eventlistener.PassageQualifier;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;
@@ -71,10 +69,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private Connection connection = null;
 	private Channel channel = null;
 	private QueueingConsumer consumer = null;
-
-    @Inject
-	@PassageQualifier
-	Event<PassageTest1Event> passageEvent;
 
 	@Inject
 	@RabbitMQMsgEnvelopeQualifier_async
