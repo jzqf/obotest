@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
-import com.qfree.obotest.event.PassageTest1Event;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
@@ -29,14 +29,14 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 	private static final Logger logger = LoggerFactory.getLogger(ConsumerMsgHandlerPassageTest1.class);
 
 	private static final long serialVersionUID = 1L;
-	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 1000;
 
 	public ConsumerMsgHandlerPassageTest1() {
 		logger.debug("{} instance created", ConsumerMsgHandlerPassageTest1.class.getSimpleName());
 	}
 
 	@Asynchronous
-	public void processMessage_async(@Observes @RabbitMQMsgEnvelopeQualifier_async PassageTest1Event event) {
+	public void processMessage_async(
+			@Observes @RabbitMQMsgEnvelopeQualifier_async RabbitMQMsgEnvelope rabbitMQMsgEnvelope) {
 
 		/* 
 		 * Release the permit that was acquired just before the CDI event that
@@ -64,7 +64,11 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				new Boolean(RabbitMQConsumerRunnable.throttled)
 				);
 
-		RabbitMQMsgAck rabbitMQMsgAck = event.getRabbitMQMsgAck();
+		/*
+		 * Extract the objects packaged in the RabbitMQMsgEnvelope parameter.
+		 */
+		RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
+		byte[] protobufMsgInBytes = rabbitMQMsgEnvelope.getMessage();
 
 		/*
 		 * Attempt to acquire a permit to process this message. This mechanism
@@ -76,13 +80,21 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		if (RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire()) {
 
 			try {
-				logger.debug("Start processing passage: {}...", event.toString());
+				logger.debug("Start processing message data: Incoming message = {}", rabbitMQMsgEnvelope);
+
+				/*
+				 * De-serialize the Protobuf message bytes into Java objects.
+				 */
+				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1
+						.parseFrom(protobufMsgInBytes);
+				String filename = passage.getImageName();
+				byte[] imageBytes = passage.getImage().toByteArray();
+
 				//				try {
 				//					logger.debug("Sleeping for 500 ms to simulate doing some work...");
 				//					Thread.sleep(500);		// simulate doing some work
 				//				} catch (InterruptedException e) {
 				//				}
-				logger.debug("Finished processing passage: {}...", event.toString());
 
 				/*
 				 * Send the result of the processing as a RabbitMQ message to a 
@@ -90,20 +102,23 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				 * 
 				 * First, create a RabbitMQ message payload.
 				 */
-				PassageTest1Protos.PassageTest1.Builder passage = PassageTest1Protos.PassageTest1.newBuilder();
-				passage.setImageName(event.getImageName());
-				passage.setImage(ByteString.copyFrom(event.getImageBytes()));
-				byte[] passageBytes = passage.build().toByteArray();
+				PassageTest1Protos.PassageTest1.Builder passageBuilder = PassageTest1Protos.PassageTest1.newBuilder();
+				passageBuilder.setImageName(filename);
+				passageBuilder.setImage(ByteString.copyFrom(imageBytes));
+				byte[] protobufMsgOutBytes = passageBuilder.build().toByteArray();
 
 				/*
-				 * Package both the RabbitMQMsgAck that is associated with the
-				 * original consumed RabbitMQ message (containing its delivery
-				 * tag and other details) and the outgoing serialized protobuf
-				 * message in a single object that can be placed in the producer
-				 * message blocking queue.
+				 * Insert the outgoing serialized Protobuf message in the same
+				 * RabbitMQMsgEnvelope object that we received above. This
+				 * RabbitMQMsgEnvelope object still contains the RabbitMQMsgAck 
+				 * object that is associated with the originally consumed 
+				 * RabbitMQ message (containing its delivery tag and other 
+				 * details). This RabbitMQMsgAck will eventually be used to 
+				 * acknowledge the originally consumed message.
 				 */
-				//TODO The RabbitMQMsgEnvelope class is quite general. Consider reusing it elsewhere.
-				RabbitMQMsgEnvelope rabbitMQMsgEnvelope = new RabbitMQMsgEnvelope(rabbitMQMsgAck, passageBytes);
+				rabbitMQMsgEnvelope.setMessage(protobufMsgOutBytes);
+
+				logger.debug("Finished processing message data. Outgoing message = {}", rabbitMQMsgEnvelope);
 
 				/*
 				 * Queue the message for publishing to a RabbitMQ broker. The 
@@ -123,124 +138,36 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 						rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
 						logger.warn("Message could not be entered into the producer queue."
 								+ " The message will be requeued on the broker.");
+					} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
+						logger.error("Message could not be entered into the producer queue. It will be lost!");
 					} else {
-						logger.warn("\n**********\nMessage could not be entered into the producer queue."
-								+ " It will be lost!\n**********");
+						// Obviously, the message will be lost.
+						logger.error("Unhandled case: RabbitMQConsumerController.ackAlgorithm = {}",
+								RabbitMQConsumerController.ackAlgorithm);
 					}
 				}
 
-			} finally {
-				RabbitMQConsumerController.messageHandlerCounterSemaphore.release();
-				logger.debug("Message handler permit released. Number of free permits = {}",
-						RabbitMQConsumerController.messageHandlerCounterSemaphore.availablePermits());
-			}
-
-		} else {
-			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-				rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
-				logger.warn("Permit not acquired to process message. The message will be requeued on the broker.");
-			} else {
-				logger.warn("\n**********\nPermit not acquired to process message."
-						+ " The message will be lost!\n**********");
-			}
-		}
-
-	}
-
-	@Asynchronous
-	public void processPassage(@Observes @PassageQualifier PassageTest1Event event) {
-
-		/* 
-		 * Release the permit that was acquired just before the CDI event that
-		 * is received in this methods was fired.
-		 */
-		RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-
-		/*
-		 * UE:  number of Unacknowledged CDI Events
-		 * MH:  number of message handlers running
-		 * PQ:  number of elements in the producer message queue
-		 * AQ:  number of elements in the acknowledgement queue
-		 */
-		logger.debug(
-				"UE={}, MH={}, PQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
-				RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
-						- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
-								.availablePermits(),
-				RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
-						RabbitMQConsumerController.messageHandlerCounterSemaphore
-								.availablePermits(),
-				RabbitMQProducerController.producerMsgQueue.size(),
-				new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-				new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-				new Boolean(RabbitMQConsumerRunnable.throttled)
-				);
-
-		RabbitMQMsgAck rabbitMQMsgAck = event.getRabbitMQMsgAck();
-
-		/*
-		 * Attempt to acquire a permit to process this message. This mechanism
-		 * enables us to know exactly home many message handler threads are
-		 * processing incoming messages at any time. This enables us to ensure 
-		 * during shutdown that all messages have been processed in the before 
-		 * waiting for the producer queue to empty.
-		 */
-		if (RabbitMQConsumerController.messageHandlerCounterSemaphore.tryAcquire()) {
-
-			try {
-				logger.debug("Start processing passage: {}...", event.toString());
-				//				try {
-				//					logger.debug("Sleeping for 500 ms to simulate doing some work...");
-				//					Thread.sleep(500);		// simulate doing some work
-				//				} catch (InterruptedException e) {
-				//				}
-				logger.debug("Finished processing passage: {}...", event.toString());
+			} catch (InvalidProtocolBufferException e) {
 
 				/*
-				 * Send the result of the processing as a RabbitMQ message to a 
-				 * RabbitMQ broker.
-				 * 
-				 * First, create a RabbitMQ message payload.
-				 */
-				PassageTest1Protos.PassageTest1.Builder passage = PassageTest1Protos.PassageTest1.newBuilder();
-				passage.setImageName(event.getImageName());
-				passage.setImage(ByteString.copyFrom(event.getImageBytes()));
-				byte[] passageBytes = passage.build().toByteArray();
-
-				/*
-				 * Package both the RabbitMQMsgAck that is associated with the
-				 * original consumed RabbitMQ message (containing its delivery
-				 * tag and other details) and the outgoing serialized protobuf
-				 * message in a single object that can be placed in the producer
-				 * message blocking queue.
-				 */
-				//TODO The RabbitMQMsgEnvelope class is quite general. Consider reusing it elsewhere.
-				RabbitMQMsgEnvelope rabbitMQMsgEnvelope = new RabbitMQMsgEnvelope(rabbitMQMsgAck, passageBytes);
-
-				/*
-				 * Queue the message for publishing to a RabbitMQ broker. The 
-				 * actual publishing will be performed in a RabbitMQ producer 
-				 * background thread.
-				 * 
-				 * Remember that success here only means that the message was 
-				 * queued for delivery, not that is *was* delivered!
-				 */
-				boolean success = this.send(rabbitMQMsgEnvelope);
-				if (success) {
-					logger.debug("Message successfully entered into the producer queue.");
+				* Dead-letter the message, but not if ackmode=AFTER_RECEIVED
+				* since the Ack will already have been sent.
+				*/
+				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
+						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
+						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+					rabbitMQMsgAck.queueNack(false);	// discard/dead-letter the message
+					logger.error(
+							"An InvalidProtocolBufferException was thrown. The message has been discarded/dead-lettered."
+									+ " Exception details:", e);
+				} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
+					logger.error(
+							"An InvalidProtocolBufferException was thrown. The message will be lost!"
+									+ " Exception details:", e);
 				} else {
-					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-						rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
-						logger.warn("Message could not be entered into the producer queue."
-								+ " The message will be requeued on the broker.");
-					} else {
-						logger.warn("\n**********\nMessage could not be entered into the producer queue."
-								+ " It will be lost!\n**********");
-					}
+					// Obviously, the message will be lost.
+					logger.error("Unhandled case: RabbitMQConsumerController.ackAlgorithm = {}",
+							RabbitMQConsumerController.ackAlgorithm);
 				}
 
 			} finally {
@@ -255,9 +182,12 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 					|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 				rabbitMQMsgAck.queueNack(true);	// requeue Nacked message
 				logger.warn("Permit not acquired to process message. The message will be requeued on the broker.");
+			} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
+				logger.error("Permit not acquired to process message.  The message will be lost!");
 			} else {
-				logger.warn("\n**********\nPermit not acquired to process message."
-						+ " The message will be lost!\n**********");
+				// Obviously, the message will be lost.
+				logger.error("Unhandled case: RabbitMQConsumerController.ackAlgorithm = {}",
+						RabbitMQConsumerController.ackAlgorithm);
 			}
 		}
 

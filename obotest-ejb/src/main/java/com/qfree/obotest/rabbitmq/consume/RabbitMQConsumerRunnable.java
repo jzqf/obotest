@@ -9,7 +9,6 @@ import javax.enterprise.event.ObserverException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
@@ -267,43 +266,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										*/
 										logger.warn("InterruptedException received.", e);
 										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-
-									} catch (InvalidProtocolBufferException e) {
-
-										//TODO This catch must be moved to the message handler
-										/*
-										* Dead-letter the message, but not if ackmode=AFTER_RECEIVED
-										* since the Ack will already have been sent.
-										*/
-										if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-												|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-												|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-											//										rabbitMQMsgAck.setRejected(true);
-											//										rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
-											//										acknowledgeMsg(rabbitMQMsgAck);
-											rabbitMQMsgAck.queueNack(false);	// discard/dead-letter the message
-											logger.error(
-													"An InvalidProtocolBufferException was thrown. The message has been discarded/dead-lettered."
-															+ " Exception details:", e);
-										} else if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
-											logger.error(
-													"An InvalidProtocolBufferException was thrown. The message will be lost!"
-															+ " Exception details:", e);
-										} else {
-											logger.error(
-													"Unhandled case: RabbitMQConsumerController.ackAlgorithm = {}",
-													RabbitMQConsumerController.ackAlgorithm);
-										}
-
-										//									} catch (IOException e) {
-										//										/*
-										//										* This exception can be thrown if channel.basicAck is executed in
-										//										* handleNextDelivery(). Since the problem occurs during an 
-										//										* acknowledgement, it should not be treated by nacking/rejecting
-										//										* the message, so we do nothing here other than logging.
-										//										*/
-										//										logger.error("IOException received:", e);
-										//					?					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
 
 									} catch (ShutdownSignalException e) {
 

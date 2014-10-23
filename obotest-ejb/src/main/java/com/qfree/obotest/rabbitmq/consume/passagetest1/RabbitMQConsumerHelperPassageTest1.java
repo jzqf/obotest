@@ -13,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.event.PassageTest1Event;
 import com.qfree.obotest.eventlistener.PassageQualifier;
-import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;
@@ -73,13 +72,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private Channel channel = null;
 	private QueueingConsumer consumer = null;
 
-	//	/*
-	//	 * This queue holds the RabbitMQ delivery tags and other details for 
-	//	 * messages that are processed in other threads but which must be 
-	//	 * acked/Nacked in this consumer thread.
-	//	 */
-	//	private BlockingQueue<RabbitMQMsgAck> acknowledgementQueue;
-
     @Inject
 	@PassageQualifier
 	Event<PassageTest1Event> passageEvent;
@@ -134,10 +126,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	public Channel getChannel() {
 		return channel;
 	}
-
-	//	public void setAcknowledgementQueue(BlockingQueue<RabbitMQMsgAck> acknowledgementQueue) {
-	//		this.acknowledgementQueue = acknowledgementQueue;
-	//	}
 
 	public void openConnection() throws IOException {
 
@@ -248,7 +236,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			InterruptedException, ShutdownSignalException, ConsumerCancelledException,
 			ObserverException, IllegalArgumentException,
 			InvalidProtocolBufferException {
-		//    , IOException                               
 
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
@@ -277,15 +264,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * TODO Use this case to test directly calling a method of an injected class.
 				 *      Test both asynchronous and synchronous calls.
 				 */
-
-				/*
-				 * Process the message synchronously, here in this thread.
-				 * 
-				 * TODO Update this to publish an outgoing message
-				 * or place and outgoing method in the producer queue, as in ConsumerMsgHandlerPassageTest1?
-				 * TODO WE need to enter an element in the acknowledgement queue if mode=AFTER_SEND
-				 */
-
 			} else {
 
 				/*
@@ -297,38 +275,16 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 *     to avoid as much code duplication as possible.
 				 */
 
+				logger.debug("Firing CDI event for {}, UnackedAvailPermits={}", rabbitMQMsgEnvelope,
+						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
+
 				/*
 				 * Process the message asynchronously in another thread that 
 				 * receives a CDI event that is fired here from this thread.
 				 */
-
-				//				try {
-
-				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(messageBytes);
-				String filename = passage.getImageName();
-				byte[] imageBytes = passage.getImage().toByteArray();
-
-				PassageTest1Event passagePayload = new PassageTest1Event();
-				passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
-				passagePayload.setImageName(filename);
-				passagePayload.setImageBytes(imageBytes);
-
-				logger.debug("Firing CDI event for {}, UnackedAvailPermits={}", passagePayload,
-						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
-
-				passageEvent.fire(passagePayload);
-				//					rabbitMQMsgEnvelopeEvent.fire(rabbitMQMsgEnvelope);
+				rabbitMQMsgEnvelopeEvent.fire(rabbitMQMsgEnvelope);
 
 				logger.debug("Returned from firing event");
-
-				//				} catch (InvalidProtocolBufferException e) {
-				//
-				//					// ONLY FOT SOME ACKNOWLEDGEMENT ALGORITHNMS. fOR OTHERS, I CAN NACK THE MESSAGE!
-				//
-				//					logger.error("An InvalidProtocolBufferException was thrown. The message will be lost!"
-				//							+ " Exception details:", e);
-				//				}
-
 			}
 
 		} else {
