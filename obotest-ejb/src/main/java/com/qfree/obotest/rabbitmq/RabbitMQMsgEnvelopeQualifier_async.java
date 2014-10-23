@@ -1,4 +1,4 @@
-package com.qfree.obotest.eventlistener;
+package com.qfree.obotest.rabbitmq;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -17,5 +17,5 @@ import javax.inject.Qualifier;
 @Qualifier
 @Retention(RUNTIME)
 @Target({METHOD, FIELD, PARAMETER, TYPE})
-public @interface PassageQualifier {
+public @interface RabbitMQMsgEnvelopeQualifier_async {
 }

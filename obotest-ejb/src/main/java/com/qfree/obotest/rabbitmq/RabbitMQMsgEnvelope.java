@@ -1,5 +1,6 @@
 package com.qfree.obotest.rabbitmq;
 
+
 public class RabbitMQMsgEnvelope {
 
 	private RabbitMQMsgAck rabbitMQMsgAck;
@@ -23,8 +24,13 @@ public class RabbitMQMsgEnvelope {
 		return message;
 	}
 
-	//	public void setMessage(byte[] message) {
-	//		this.message = message;
-	//	}
+	public void setMessage(byte[] message) {
+		this.message = message;
+	}
+
+	@Override
+	public String toString() {
+		return "RabbitMQMsgEnvelope [rabbitMQMsgAck=" + rabbitMQMsgAck + ", message=" + message.length + " bytes]";
+	}
 
 }

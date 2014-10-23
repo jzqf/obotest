@@ -9,7 +9,6 @@ import javax.enterprise.event.ObserverException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
@@ -239,7 +238,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										 */
 										if (rabbitMQMsgAck.hasMessage()) {
 											if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
-												//												channel.basicAck(deliveryTag, false);
 												rabbitMQMsgAck.setRejected(false);  // message should be Acked, i.e., not Nacked
 												acknowledgeMsg(rabbitMQMsgAck);
 											}
@@ -268,28 +266,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										*/
 										logger.warn("InterruptedException received.", e);
 										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-
-									} catch (InvalidProtocolBufferException e) {
-
-										/*
-										* If this exception is thrown, no message will have been received
-										* in handleNextDelivery(); therefore, there is no need to nack/reject
-										* any message.
-										*/
-										logger.error("InvalidProtocolBufferException received:", e);
-										//TODO Dead-letter the message if ackmode=AFTER_RECEIVED or AFTER_PUBLISHED
-										rabbitMQMsgAck.setRejected(true);
-										rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
-										acknowledgeMsg(rabbitMQMsgAck);
-
-										//									} catch (IOException e) {
-										//										/*
-										//										* This exception can be thrown when channel.basicAck is executed in
-										//										* handleNextDelivery(). Since the problem occurs during an 
-										//										* acknowledgement, it should not be treated by nacking/rejecting
-										//										* the message, so we do nothing here other than logging.
-										//										*/
-										//										logger.error("IOException received:", e);
 
 									} catch (ShutdownSignalException e) {
 
@@ -356,7 +332,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 									} catch (Throwable e) {
 
-										// I'm not sure if/when this will occur.
+										// I'm not sure if/when this will ever occur.
 										// We log the exception, but do not terminate this thread.
 										logger.error("Unexpected exception caught:", e);
 										rabbitMQMsgAck.setRejected(true);
@@ -367,13 +343,6 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 								} else {
 									logger.warn("Permit not acquired to consume message.");
-									//									if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-									//											|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-									//											|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-									//										logger.warn("Permit not acquired for CDI event to be sent.");
-									//									} else {
-									//										logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
-									//									}
 								}
 
 								//								} else {

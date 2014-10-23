@@ -67,7 +67,6 @@ public class RabbitMQProducerController {
 	private static final int NUM_RABBITMQ_PRODUCER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_PRODUCER_MS = 2000;
 	public static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Optimize queue size?
-	//	private static final long PRODUCER_BLOCKING_QUEUE_TIMEOUT_MS = 10000;
 	private static final long WAITING_LOOP_SLEEP_MS = 1000;
 	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
 	
