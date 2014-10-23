@@ -23,8 +23,8 @@ public class RabbitMQMsgEnvelope {
 		return message;
 	}
 
-	//	public void setMessage(byte[] message) {
-	//		this.message = message;
-	//	}
+	public void setMessage(byte[] message) {
+		this.message = message;
+	}
 
 }

@@ -16,6 +16,7 @@ import com.qfree.obotest.eventlistener.PassageQualifier;
 import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
@@ -82,6 +83,10 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
     @Inject
 	@PassageQualifier
 	Event<PassageTest1Event> passageEvent;
+
+	@Inject
+	@RabbitMQMsgEnvelopeQualifier_async
+	Event<RabbitMQMsgEnvelope> rabbitMQMsgEnvelopeEvent;
 
 	/*
 	 * This set was used to detect the situation where it appears that there
@@ -248,12 +253,22 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 		QueueingConsumer.Delivery delivery = consumer.nextDelivery(RABBITMQ_CONSUMER_TIMEOUT_MS);
 		if (delivery != null) {
 
-			long deliveryTag = delivery.getEnvelope().getDeliveryTag();
+			/*
+			 * rabbitMQMsgEnvelope is the object that will be sent to the 
+			 * message "handler" to process the message just consumed. Here, the
+			 * consumed message is placed in rabbitMQMsgEnvelope.
+			 */
+			byte[] messageBytes = delivery.getBody();
+			rabbitMQMsgEnvelope.setMessage(messageBytes);
 
+			/*
+			 * Obtain the delivery tag for the consumed message. This is also
+			 * stored in rabbitMQMsgEnvelope, not directly but within its 
+			 * rabbitMQMsgAck attribute.
+			 */
+			long deliveryTag = delivery.getEnvelope().getDeliveryTag();
 			RabbitMQMsgAck rabbitMQMsgAck = rabbitMQMsgEnvelope.getRabbitMQMsgAck();
 			rabbitMQMsgAck.setDeliveryTag(deliveryTag);
-
-			byte[] messageBytes = delivery.getBody();
 
 			logger.debug("Received passage message: deliveryTag={}, {} bytes", deliveryTag, messageBytes.length);
 
@@ -284,74 +299,37 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 				/*
 				 * Process the message asynchronously in another thread that 
-				 * receives a CDI event that is sent from this thread.
+				 * receives a CDI event that is fired here from this thread.
 				 */
-				//				this.firePassageEvent(messageBytes, deliveryTag);
 
-				//				RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
+				//				try {
 
-				try {
+				PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(messageBytes);
+				String filename = passage.getImageName();
+				byte[] imageBytes = passage.getImage().toByteArray();
 
-					PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(messageBytes);
-					String filename = passage.getImageName();
-					byte[] imageBytes = passage.getImage().toByteArray();
+				PassageTest1Event passagePayload = new PassageTest1Event();
+				passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
+				passagePayload.setImageName(filename);
+				passagePayload.setImageBytes(imageBytes);
 
-					PassageTest1Event passagePayload = new PassageTest1Event();
-					passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
-					passagePayload.setImageName(filename);
-					passagePayload.setImageBytes(imageBytes);
+				logger.debug("Firing CDI event for {}, UnackedAvailPermits={}", passagePayload,
+						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
 
-					//					if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
-					logger.debug("Firing CDI event for {}, UnackedAvailPermits={}", passagePayload,
-							RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
-					//						try {
-					passageEvent.fire(passagePayload);
-					//						} catch (Throwable e) {
-					//							logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
-					//
-					//							/*
-					//							 * If an exception was thrown firing a CDI event (I don't
-					//							 * know if this is even possible, we release the permit just
-					//							 * acquired because there will probably be no session bean 
-					//							 * to receive the event that would normally do this. 
-					//							 */
-					//							RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-					//
-					//							//							if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-					//							//									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-					//							//									|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-					//							//								rabbitMQMsgAck.setRejected(true);
-					//							//								rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
-					//							//								acknowledgeMsg(rabbitMQMsgAck);
-					//							//							}
-					//						}
-					logger.debug("[{}]: Returned from firing event", subClassName);
-					//					} else {
-					//						if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-					//								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-					//								|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-					//							rabbitMQMsgAck.setRejected(true);
-					//							rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
-					//							acknowledgeMsg(rabbitMQMsgAck);
-					//							logger.warn("Permit not acquired for CDI event to be sent.");
-					//						} else {
-					//							logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
-					//						}
-					//					}
+				passageEvent.fire(passagePayload);
+				//					rabbitMQMsgEnvelopeEvent.fire(rabbitMQMsgEnvelope);
 
-				} catch (InvalidProtocolBufferException e) {
-					logger.error("[{}]: An InvalidProtocolBufferException was thrown. The message will be lost!",
-							subClassName);
-					logger.error("Exception details:", e);
-				}
+				logger.debug("Returned from firing event");
+
+				//				} catch (InvalidProtocolBufferException e) {
+				//
+				//					// ONLY FOT SOME ACKNOWLEDGEMENT ALGORITHNMS. fOR OTHERS, I CAN NACK THE MESSAGE!
+				//
+				//					logger.error("An InvalidProtocolBufferException was thrown. The message will be lost!"
+				//							+ " Exception details:", e);
+				//				}
 
 			}
-
-			//			unackedDeliveryKeySet.add(deliveryTag);
-
-			//			if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_RECEIVED) {
-			//				channel.basicAck(deliveryTag, false);
-			//			}
 
 		} else {
 			logger.info("********** NO MESSAGE **********"); //TODO DELETEME
@@ -368,137 +346,6 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 			 */
 		}
 	}
-
-	//	/**
-	//	 * Acknowledges a consumed RabbitMQ message, according to the supplied
-	//	 * RabbitMQMsgAck argument.
-	//	 * @throws IOException 
-	//	 */
-	//	public void acknowledgeMsg(RabbitMQMsgAck rabbitMQMsgAck) {
-	//		try {
-	//			if (!rabbitMQMsgAck.isRejected()) {
-	//				// Acknowledge the message, and only this message.
-	//				logger.debug("Acking delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
-	//				//logger.debug("Acking message: {}", rabbitMQMsgAck);
-	//				channel.basicAck(rabbitMQMsgAck.getDeliveryTag(), false);
-	//
-	//				//				Long deliveryTag = rabbitMQMsgAck.getDeliveryTag();
-	//				//				if (unackedDeliveryKeySet.contains(deliveryTag)) {
-	//				//					unackedDeliveryKeySet.remove(deliveryTag);
-	//				//				} else {
-	//				//					logger.warn("deliveryTag {} not found in unackedDeliveryKeySet!", deliveryTag);
-	//				//				}
-	//				//				logger.info("unackedDeliveryKeySet = {}", unackedDeliveryKeySet);
-	//				//				if (!unackedDeliveryKeySet.isEmpty()) {
-	//				//					if (unackedDeliveryKeySet.last() - unackedDeliveryKeySet.first() > 100) {
-	//				//						// It seems likely that there are messages that will never be acknowledged!
-	//				//						logger.info("Problem detected!" +
-	//				//								" It looks like there are messages that will *never* be acknowledged." + ""
-	//				//								+ " Disabling the consumer threads...");
-	//				//						RabbitMQConsumerController.state = RabbitMQConsumerControllerStates.DISABLED;
-	//				//					}
-	//				//				}
-	//
-	//			} else {
-	//				/*
-	//				 * Reject the message, and request that it be requeued or not 
-	//				 * according to the value of rabbitMQMsgAck.isRequeueRejectedMsg().
-	//				 */
-	//				logger.warn("Nacking delivery tag = {}", rabbitMQMsgAck.getDeliveryTag());
-	//				//logger.warn("Nacking message: {}", rabbitMQMsgAck);
-	//				channel.basicNack(rabbitMQMsgAck.getDeliveryTag(), false, rabbitMQMsgAck.isRequeueRejectedMsg());
-	//			}
-	//		} catch (IOException e) {
-	//			// This is very unlikely, but:
-	//			//TODO What should I do with the rabbitMQMsgAck message here?
-	//			logger.error("Exception thrown acknowledging a RabbitMQ message. rabbitMQMsgAck = {}, exception = {}",
-	//					rabbitMQMsgAck, e);
-	//		}
-	//	}
-
-	//	/*
-	//	 * By making this method (as well as the method that receives the fired 
-	//	 * event) asynchronous, the event mechanism becomes a sort of 
-	//	 * "fire-and-forget" call. If we do annotate this method here with 
-	//	 * @Asynchronous, but not the receiving (@Observes) method, then the Java EE
-	//	 * container will use a pool of threads to fire many events (one in each 
-	//	 * thread), but each thread will wait for the event to be processed before 
-	//	 * proceeding, so it isn't fully asynchronous and nothing is gained. It is
-	//	 * important, therefore, to just follow the rule that @Asynchronous be used 
-	//	 * on both the method that fires the event as well as the method that 
-	//	 * receives (@Observes) the event.
-	//	 * 
-	//	 * Note:  Testing seems to show that it is not actually necessary to 
-	//	 *        annotate with @Asynchronous this method here that does the firing,
-	//	 *        i.e., the key thing is to annotate the method that receives
-	//	 *        (observes) the event. But for the time being I will do this until 
-	//	 *        a reason becomes apparent for not doing it.
-	//	 * 
-	//	 * TODO Should I send the raw Protobuf message in the event object and then parse it in the @Observer method????!!!
-	//	 * 
-	//	 */
-	//	//TODO I AM NOT SURE THIS IS REALLY AN ASYNCHRONOUS CALL. TEST WITH AND WIHTOUT THIS @Asynchronous
-	//	//	@Asynchronous
-	//	@Lock(LockType.WRITE)
-	//	private void firePassageEvent(byte[] messageBytes, long deliveryTag) {
-	//
-	//		RabbitMQMsgAck rabbitMQMsgAck = new RabbitMQMsgAck(acknowledgementQueue, deliveryTag);
-	//
-	//		try {
-	//
-	//			PassageTest1Protos.PassageTest1 passage = PassageTest1Protos.PassageTest1.parseFrom(messageBytes);
-	//			String filename = passage.getImageName();
-	//			byte[] imageBytes = passage.getImage().toByteArray();
-	//
-	//			PassageTest1Event passagePayload = new PassageTest1Event();
-	//			passagePayload.setRabbitMQMsgAck(rabbitMQMsgAck);
-	//			passagePayload.setImageName(filename);
-	//			passagePayload.setImageBytes(imageBytes);
-	//
-	//			if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
-	//				logger.debug("[{}]: Firing CDI event for {}, UnackedAvailPermits={}", subClassName, passagePayload,
-	//						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
-	//				try {
-	//					passageEvent.fire(passagePayload);
-	//				} catch (Throwable e) {
-	//					logger.error("[{}]: An exception was caught firing a CDI event: {}", subClassName, e);
-	//
-	//					/*
-	//					 * If an exception was thrown firing a CDI event (I don't
-	//					 * know if this is even possible, we release the permit just
-	//					 * acquired because there will probably be no session bean 
-	//					 * to receive the event that would normally do this. 
-	//					 */
-	//					RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
-	//
-	//					if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-	//							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-	//							|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-	//						rabbitMQMsgAck.setRejected(true);
-	//						rabbitMQMsgAck.setRequeueRejectedMsg(false);	// discard/dead-letter the message
-	//						acknowledgeMsg(rabbitMQMsgAck);
-	//					}
-	//				}
-	//				logger.debug("[{}]: Returned from firing event", subClassName);
-	//			} else {
-	//				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
-	//						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX
-	//						|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
-	//					rabbitMQMsgAck.setRejected(true);
-	//					rabbitMQMsgAck.setRequeueRejectedMsg(true);	// requeue the message
-	//					acknowledgeMsg(rabbitMQMsgAck);
-	//					logger.warn("Permit not acquired for CDI event to be sent.");
-	//				} else {
-	//					logger.warn("\n**********\nPermit not acquired for CDI event to be sent. The message will be lost!\n**********");
-	//				}
-	//			}
-	//
-	//		} catch (InvalidProtocolBufferException e) {
-	//			logger.error("[{}]: An InvalidProtocolBufferException was thrown. The message will be lost!", subClassName);
-	//			logger.error("Exception details:", e);
-	//		}
-	//
-	//	}
 
 	@PreDestroy
 	public void terminate() {
