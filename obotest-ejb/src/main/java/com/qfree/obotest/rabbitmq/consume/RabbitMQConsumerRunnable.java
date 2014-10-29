@@ -61,6 +61,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * the the logical OR of other "throttled" variables that are set true or
 	 * false based on specific conditions.
 	 */
+//	public static volatile boolean throttled = false;
 	public static volatile boolean throttled = false;
 	/**
 	 * Set to true when the number of free elements available in the 
@@ -114,6 +115,10 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	public RabbitMQConsumerRunnable(RabbitMQConsumerHelper messageConsumerHelper) {
 		super();
 		this.messageConsumerHelper = messageConsumerHelper;
+	}
+
+	public BlockingQueue<RabbitMQMsgAck> getAcknowledgementQueue() {
+		return acknowledgementQueue;
 	}
 
 	@Override
