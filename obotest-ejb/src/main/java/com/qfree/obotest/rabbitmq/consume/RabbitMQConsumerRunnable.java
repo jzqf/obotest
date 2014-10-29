@@ -85,6 +85,17 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	private Channel channel = null;
 
 	/*
+	 * This queue holds the RabbitMQ delivery tags and other details for 
+	 * messages that are processed in other threads but which must be 
+	 * acked/nacked in this consumer thread. A new queue is created each
+	 * time a channel is opened because the delivery tags that are used
+	 * to ack/nack the consumed messages are specific to the channel 
+	 * used to consume the original messages.
+	 */
+	private final BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
+			RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH);
+
+	/*
 	 * This variable measures how long termination has been deferred because
 	 * the conditions necessary for termination have not been met. This is
 	 * used to implement a simple safety net to avoid getting caught in an
@@ -118,16 +129,16 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 					channel = messageConsumerHelper.getChannel();
 
-					/*
-					 * This queue holds the RabbitMQ delivery tags and other details for 
-					 * messages that are processed in other threads but which must be 
-					 * acked/nacked in this consumer thread. A new queue is created each
-					 * time a channel is opened because the delivery tags that are used
-					 * to ack/nack the consumed messages are specific to the channel 
-					 * used to consume the original messages.
-					 */
-					BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
-							RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH);
+					//					/*
+					//					 * This queue holds the RabbitMQ delivery tags and other details for 
+					//					 * messages that are processed in other threads but which must be 
+					//					 * acked/nacked in this consumer thread. A new queue is created each
+					//					 * time a channel is opened because the delivery tags that are used
+					//					 * to ack/nack the consumed messages are specific to the channel 
+					//					 * used to consume the original messages.
+					//					 */
+					//					BlockingQueue<RabbitMQMsgAck> acknowledgementQueue = new LinkedBlockingQueue<>(
+					//							RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH);
 
 					//					messageConsumerHelper.setAcknowledgementQueue(acknowledgementQueue);
 

@@ -90,11 +90,11 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				String filename = passage.getImageName();
 				byte[] imageBytes = passage.getImage().toByteArray();
 
-				//				try {
-				//					logger.debug("Sleeping for 500 ms to simulate doing some work...");
-				//					Thread.sleep(500);		// simulate doing some work
-				//				} catch (InterruptedException e) {
-				//				}
+				try {
+					logger.debug("Sleeping for 100 ms to simulate doing some work...");
+					Thread.sleep(100);		// simulate doing some work
+				} catch (InterruptedException e) {
+				}
 
 				/*
 				 * Send the result of the processing as a RabbitMQ message to a 
