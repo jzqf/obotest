@@ -161,6 +161,7 @@ public class RabbitMQConsumerController {
 	 * such as from the RabbitMQProducerController singleton bean thread, as
 	 * well as from the servlet that stops the consumer threads.
 	 */
+	//TODO Make rabbitMQConsumerRunnable & rabbitMQConsumerThread non-static (will need rabbitMQConsumerRunnable getter)?
 	public static volatile RabbitMQConsumerRunnable rabbitMQConsumerRunnable = null;
 	public static volatile Thread rabbitMQConsumerThread = null;
 	// This is for NUM_RABBITMQ_CONSUMER_THREADS > 1:
@@ -174,6 +175,7 @@ public class RabbitMQConsumerController {
 	 * other threads, such as from the RabbitMQProducerController singleton bean
 	 * thread, as well as from the servlet that stops the consumer threads.
 	 */
+	//TODO Make rabbitMQConsumerRunnables, rabbitMQConsumerThreadHelpers & rabbitMQConsumerThreads non-static (will need rabbitMQConsumerRunnables & rabbitMQConsumerThreads getter)?
 	public static final List<RabbitMQConsumerRunnable> rabbitMQConsumerRunnables =
 			Collections.synchronizedList(new ArrayList<RabbitMQConsumerRunnable>());
 	public static final List<RabbitMQConsumerHelper> rabbitMQConsumerThreadHelpers =
