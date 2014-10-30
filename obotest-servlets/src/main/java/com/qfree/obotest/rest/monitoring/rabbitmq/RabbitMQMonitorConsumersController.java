@@ -36,47 +36,15 @@ public class RabbitMQMonitorConsumersController {
 		logger.info("/ack_queue/size requested for consumer thread #{}", thread);
 
 		int ack_queue_size = -1;
-		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 
-			if (RabbitMQConsumerController.rabbitMQConsumerRunnable != null) {
-				ack_queue_size = RabbitMQConsumerController.rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
-			} else {
-				/*
-				 * This case will occur if this was called before the consumer  
-				 * threads have been started. We return a sensible value so that 
-				 * monitoring will still function sensibly.
-				 */
-				ack_queue_size = 0;
-			}
-
+		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
+		if (rabbitMQConsumerRunnable != null) {
+			ack_queue_size = rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
 		} else {
-
-			if (RabbitMQConsumerController.rabbitMQConsumerRunnables != null) {
-				if ((thread <= RabbitMQConsumerController.rabbitMQConsumerRunnables.size()) && (thread >= 1)) {
-					/* 
-					 * "threadIndex" is zero-based, but "thread" is one-based.
-					 */
-					int threadIndex = thread - 1;
-					RabbitMQConsumerRunnable rabbitMQConsumerRunnable =
-							RabbitMQConsumerController.rabbitMQConsumerRunnables.get(threadIndex);
-					if (rabbitMQConsumerRunnable != null) {
-						ack_queue_size = rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
-					} else {
-						/*
-						 * This case will occur if this was called before the consumer  
-						 * threads have been started. We return a sensible value so that 
-						 * monitoring will still function sensibly.
-						 */
-						ack_queue_size = 0;
-					}
-				} else {
-					logger.error("thread = {}. Value must be in range [0,{}].", thread,
-							RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
-				}
-			} else {
-				logger.error("rabbitMQConsumerController.rabbitMQConsumerRunnables is null. thread = {}", thread);
-			}
-
+			/*
+			 * This case can occur if this code is called before the 
+			 * consumer threads have been started.
+			 */
 		}
 		return ack_queue_size;
 	}
@@ -96,45 +64,97 @@ public class RabbitMQMonitorConsumersController {
 		logger.info("/throttled requested for consumer thread #{}", thread);
 
 		boolean throttled = false;
+
+		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
+		if (rabbitMQConsumerRunnable != null) {
+			throttled = rabbitMQConsumerRunnable.isThrottled();
+		} else {
+			/*
+			 * This case can occur if this code is called before the 
+			 * consumer threads have been started.
+			 */
+		}
+		return throttled ? 1 : 0;
+	}
+
+	@GET
+	@Path("/{thread}/throttled_producer_msg_queue")
+	@Produces("text/plain;v=1")
+	public int throttled_producer_msg_queue(@PathParam("thread") int thread) {
+
+		logger.info("/throttled_producer_msg_queue requested for consumer thread #{}", thread);
+
+		boolean throttled_producer_msg_queue = false;
+
+		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
+		if (rabbitMQConsumerRunnable != null) {
+			throttled_producer_msg_queue = rabbitMQConsumerRunnable.isThrottled_ProducerMsgQueue();
+		} else {
+			/*
+			 * This case can occur if this code is called before the 
+			 * consumer threads have been started.
+			 */
+		}
+		return throttled_producer_msg_queue ? 1 : 0;
+	}
+
+	@GET
+	@Path("/{thread}/throttled_unacked_async_calls")
+	@Produces("text/plain;v=1")
+	public int throttled_unacked_async_calls(@PathParam("thread") int thread) {
+
+		logger.info("/throttled_unacked_async_calls requested for consumer thread #{}", thread);
+
+		boolean throttled_unacked_async_calls = false;
+
+		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
+		if (rabbitMQConsumerRunnable != null) {
+			throttled_unacked_async_calls = rabbitMQConsumerRunnable.isThrottled_UnacknowledgedCDIEvents();
+		} else {
+			/*
+			 * This case can occur if this code is called before the 
+			 * consumer threads have been started.
+			 */
+		}
+		return throttled_unacked_async_calls ? 1 : 0;
+	}
+
+	/**
+	 * Returns the RabbitMQConsumerRunnable associated with index "threadIndex",
+	 * or null if it does not exist 
+	 * 
+	 * @param threadIndex
+	 */
+	private RabbitMQConsumerRunnable getRabbitMQConsumerRunnable(int threadIndex) {
+
+		logger.info("RabbitMQConsumerRunnable requested for thread index #{}", threadIndex);
+
+		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = null;
+
 		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
 
-			if (RabbitMQConsumerController.rabbitMQConsumerRunnable != null) {
-				throttled = RabbitMQConsumerController.rabbitMQConsumerRunnable.isThrottled();
+			if (threadIndex == 0) {
+				rabbitMQConsumerRunnable = RabbitMQConsumerController.rabbitMQConsumerRunnable;
 			} else {
-				/*
-				 * This case will occur if this was called before the consumer  
-				 * threads have been started.
-				 */
+				logger.error("threadIndex = {}. The only legal value here is 0.", threadIndex);
 			}
 
 		} else {
 
 			if (RabbitMQConsumerController.rabbitMQConsumerRunnables != null) {
-				if ((thread <= RabbitMQConsumerController.rabbitMQConsumerRunnables.size()) && (thread >= 1)) {
-					/* 
-					 * "threadIndex" is zero-based, but "thread" is one-based.
-					 */
-					int threadIndex = thread - 1;
-					RabbitMQConsumerRunnable rabbitMQConsumerRunnable =
-							RabbitMQConsumerController.rabbitMQConsumerRunnables.get(threadIndex);
-					if (rabbitMQConsumerRunnable != null) {
-						throttled = rabbitMQConsumerRunnable.isThrottled();
-					} else {
-						/*
-						 * This case will occur if this was called before the consumer  
-						 * threads have been started.
-						 */
-					}
+				if ((threadIndex < RabbitMQConsumerController.rabbitMQConsumerRunnables.size()) && (threadIndex >= 0)) {
+					rabbitMQConsumerRunnable = RabbitMQConsumerController.rabbitMQConsumerRunnables.get(threadIndex);
 				} else {
-					logger.error("thread = {}. Value must be in range [0,{}].", thread,
-							RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
+					logger.error("threadIndex = {}. Value must be in range [0, {}].", threadIndex,
+							RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS - 1);
 				}
 			} else {
-				logger.error("rabbitMQConsumerController.rabbitMQConsumerRunnables is null. thread = {}", thread);
+				logger.error("rabbitMQConsumerController.rabbitMQConsumerRunnables is null");
 			}
 
 		}
-		return throttled ? 1 : 0;
+
+		return rabbitMQConsumerRunnable;
 	}
 
 }
