@@ -64,7 +64,7 @@ public class RabbitMQProducerController {
 		STOPPED, RUNNING
 	};
 
-	private static final int NUM_RABBITMQ_PRODUCER_THREADS = 2;
+	public static final int NUM_RABBITMQ_PRODUCER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_PRODUCER_MS = 2000;
 	public static final int PRODUCER_BLOCKING_QUEUE_LENGTH = 100;	//TODO Optimize queue size?
 	private static final long WAITING_LOOP_SLEEP_MS = 1000;
@@ -114,8 +114,8 @@ public class RabbitMQProducerController {
 	public static volatile RabbitMQProducerControllerStates state = RabbitMQProducerControllerStates.STOPPED;
 
 	// NUM_RABBITMQ_PRODUCER_THREADS == 1:
-	private RabbitMQProducerRunnable rabbitMQProducer = null;
-	private Thread rabbitMQProducerThread = null;
+	private volatile RabbitMQProducerRunnable rabbitMQProducerRunnable = null;
+	private volatile Thread rabbitMQProducerThread = null;
 	// NUM_RABBITMQ_PRODUCER_THREADS > 1:
 	// These are parallel lists (arrays could also be used). There will be one
 	// element in each list for each RabbitMQ producer thread to be started from
@@ -126,6 +126,14 @@ public class RabbitMQProducerController {
 			Collections.synchronizedList(new ArrayList<RabbitMQProducerHelper>());
 	private final List<Thread> rabbitMQProducerThreads =
 			Collections.synchronizedList(new ArrayList<Thread>());
+
+	public RabbitMQProducerRunnable getRabbitMQProducerRunnable() {
+		return rabbitMQProducerRunnable;
+	}
+
+	public List<RabbitMQProducerRunnable> getRabbitMQProducerRunnables() {
+		return rabbitMQProducerRunnables;
+	}
 
 	/*
 	 * @Startup ensures that this method is called when the application starts 
@@ -265,8 +273,8 @@ public class RabbitMQProducerController {
 				if (rabbitMQProducerThread == null || !rabbitMQProducerThread.isAlive()) {
 
 					logger.info("Starting RabbitMQ producer thread...");
-					rabbitMQProducer = new RabbitMQProducerRunnable(messageProducerHelperBean1);
-					rabbitMQProducerThread = threadFactory.newThread(rabbitMQProducer);
+					rabbitMQProducerRunnable = new RabbitMQProducerRunnable(messageProducerHelperBean1);
+					rabbitMQProducerThread = threadFactory.newThread(rabbitMQProducerRunnable);
 					rabbitMQProducerThread.start();
 
 				} else {

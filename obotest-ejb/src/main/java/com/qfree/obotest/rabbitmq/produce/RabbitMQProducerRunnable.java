@@ -51,6 +51,9 @@ public class RabbitMQProducerRunnable implements Runnable {
 	 */
 	private static final long MAX_WAIT_BEFORE_TERMINATION_MS = 60000;  // 60s
 
+	/*
+	 * This is injected in the constructor.
+	 */
 	RabbitMQProducerHelper messageProducerHelper = null;
 
 	/*
@@ -60,6 +63,45 @@ public class RabbitMQProducerRunnable implements Runnable {
 	 * endless loop when shutting down the producer threads.
 	 */
 	private long terminationRequestedTime = 0;
+	/*
+	 * This map will hold all of the RabbitMQMsgAck objects that will
+	 * be used to acknowledge the messages that were originally
+	 * consumed in order to create the messages that are published
+	 * in this thread. The keys for this objects are the sequence
+	 * numbers for the messages published in this thread. These
+	 * sequence numbers will all eventually be sent back by the 
+	 * RabbitMQ broker that receives these published messages after
+	 * that broker determines that the message has either been 
+	 * persisted, delivered to another consumer or whatever, i.e.,
+	 * the message has been confirmed at the other end. These 
+	 * sequence numbers that are sent back by the broker are received
+	 * in this thread by either a "ConfirmListener" (corresponding
+	 * to "acks" or "nacks") or possibly a "ReturnListener" (for 
+	 * failed deliveries when basicPublish is called with "mandatory"
+	 * or "immediate" flags set). In this way, the returned sequence
+	 * numbers become the deliveryTags for the messages).
+	 * 
+	 * As the deliveryTags (sequence numbers) are received in this 
+	 * thread, the corresponding RabbitMQMsgAck objects are placed in
+	 * the acknowledgement queue for the appropriate consumer thread
+	 * (after first setting their attributes appropriately for an 
+	 * "ack" or a "nack") so that the original message can be "acked"
+	 * or "nacked" when the acknowledgement queue is processed by the
+	 * consumer thread.
+	 * 
+	 * Note:
+	 * 1. The "mandatory" flag is used to tell the broker that the 
+	 *    message sent to it *must* be routable to at least one queue.
+	 *    If, for any reason, this is not possible, the broker will 
+	 *    respond appropriately. If this flag is not set and the 
+	 *    broker cannot route the message to a queue, the message  
+	 *    will probably be dropped/discarded.
+	 * 2. According to https://www.rabbitmq.com/specification.html,
+	 *    it appears that the RabbitMQ server might not support the 
+	 *    "immediate" flag.
+	 */
+	private final SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms =
+			Collections.synchronizedSortedMap(new TreeMap<Long, RabbitMQMsgAck>());
 
 	/*
 	 * This constructor is necessary, since this is a stateless session bean,
@@ -74,50 +116,54 @@ public class RabbitMQProducerRunnable implements Runnable {
 		this.messageProducerHelper = messageProducerHelper;
 	}
 
+	public SortedMap<Long, RabbitMQMsgAck> getPendingPublisherConfirms() {
+		return pendingPublisherConfirms;
+	}
+
 	@Override
 	public void run() {
 
 		logger.info("Starting RabbitMQ message producer...");
 
-		/*
-		 * This map will hold all of the RabbitMQMsgAck objects that will
-		 * be used to acknowledge the messages that were originally
-		 * consumed in order to create the messages that are published
-		 * in this thread. The keys for this objects are the sequence
-		 * numbers for the messages published in this thread. These
-		 * sequence numbers will all eventually be sent back by the 
-		 * RabbitMQ broker that receives these published messages after
-		 * that broker determines that the message has either been 
-		 * persisted, delivered to another consumer or whatever, i.e.,
-		 * the message has been confirmed at the other end. These 
-		 * sequence numbers that are sent back by the broker are received
-		 * in this thread by either a "ConfirmListener" (corresponding
-		 * to "acks" or "nacks") or possibly a "ReturnListener" (for 
-		 * failed deliveries when basicPublish is called with "mandatory"
-		 * or "immediate" flags set). In this way, the returned sequence
-		 * numbers become the deliveryTags for the messages).
-		 * 
-		 * As the deliveryTags (sequence numbers) are received in this 
-		 * thread, the corresponding RabbitMQMsgAck objects are placed in
-		 * the acknowledgement queue for the appropriate consumer thread
-		 * (after first setting their attributes appropriately for an 
-		 * "ack" or a "nack") so that the original message can be "acked"
-		 * or "nacked" when the acknowledgement queue is processed by the
-		 * consumer thread.
-		 * 
-		 * Note:
-		 * 1. The "mandatory" flag is used to tell the broker that the 
-		 *    message sent to it *must* be routable to at least one queue.
-		 *    If, for any reason, this is not possible, the broker will 
-		 *    respond appropriately. If this flag is not set and the 
-		 *    broker cannot route the message to a queue, the message  
-		 *    will probably be dropped/discarded.
-		 * 2. According to https://www.rabbitmq.com/specification.html,
-		 *    it appears that the RabbitMQ server might not support the 
-		 *    "immediate" flag.
-		 */
-		SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms = Collections
-				.synchronizedSortedMap(new TreeMap<Long, RabbitMQMsgAck>());
+		//		/*
+		//		 * This map will hold all of the RabbitMQMsgAck objects that will
+		//		 * be used to acknowledge the messages that were originally
+		//		 * consumed in order to create the messages that are published
+		//		 * in this thread. The keys for this objects are the sequence
+		//		 * numbers for the messages published in this thread. These
+		//		 * sequence numbers will all eventually be sent back by the 
+		//		 * RabbitMQ broker that receives these published messages after
+		//		 * that broker determines that the message has either been 
+		//		 * persisted, delivered to another consumer or whatever, i.e.,
+		//		 * the message has been confirmed at the other end. These 
+		//		 * sequence numbers that are sent back by the broker are received
+		//		 * in this thread by either a "ConfirmListener" (corresponding
+		//		 * to "acks" or "nacks") or possibly a "ReturnListener" (for 
+		//		 * failed deliveries when basicPublish is called with "mandatory"
+		//		 * or "immediate" flags set). In this way, the returned sequence
+		//		 * numbers become the deliveryTags for the messages).
+		//		 * 
+		//		 * As the deliveryTags (sequence numbers) are received in this 
+		//		 * thread, the corresponding RabbitMQMsgAck objects are placed in
+		//		 * the acknowledgement queue for the appropriate consumer thread
+		//		 * (after first setting their attributes appropriately for an 
+		//		 * "ack" or a "nack") so that the original message can be "acked"
+		//		 * or "nacked" when the acknowledgement queue is processed by the
+		//		 * consumer thread.
+		//		 * 
+		//		 * Note:
+		//		 * 1. The "mandatory" flag is used to tell the broker that the 
+		//		 *    message sent to it *must* be routable to at least one queue.
+		//		 *    If, for any reason, this is not possible, the broker will 
+		//		 *    respond appropriately. If this flag is not set and the 
+		//		 *    broker cannot route the message to a queue, the message  
+		//		 *    will probably be dropped/discarded.
+		//		 * 2. According to https://www.rabbitmq.com/specification.html,
+		//		 *    it appears that the RabbitMQ server might not support the 
+		//		 *    "immediate" flag.
+		//		 */
+		//		SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms = Collections
+		//				.synchronizedSortedMap(new TreeMap<Long, RabbitMQMsgAck>());
 
 		try {
 			messageProducerHelper.openConnection();
