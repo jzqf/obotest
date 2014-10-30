@@ -193,6 +193,50 @@ public class RabbitMQProducerRunnable implements Runnable {
 								 */
 								nextPublishSeqNo = channel.getNextPublishSeqNo();
 
+								/*
+								 * Enter the RabbitMQMsgAck object into the "pending publisher confirms"
+								 * map. This map will be processed by the ConfirmListener added above
+								 * with channel.addConfirmListener(...).
+								 * 
+								 * IMPORTANT:
+								 * 
+								 * We must add this entry into this map *before* the message is 
+								 * published below with messageProducerHelper.handlePublish(...).
+								 * The reason for this has to do with the multi-threaded nature of 
+								 * "publisher confirms" mechanism. If we, instead, added this entry
+								 * into the "pendingPublisherConfirms" map immediately _after_ the 
+								 * call to messageProducerHelper.handlePublish(...), the following 
+								 * sequence of events could occur (and testing showed that this 
+								 * _will_ occur), which is not what we want:
+								 * 
+								 *   1. Message is published in this thread below in
+								 *      messageProducerHelper.handlePublish(...).
+								 * 
+								 *   2. This thread is suspended so that another thread can run.
+								 * 
+								 *   3. The RabbitMQ broker send back a confirmation for the message
+								 *      published in step 1 above. This confirmation will include 
+								 *      the "sequence number" (delivery tag) for the message that 
+								 *      was published in step 1.
+								 *   
+								 *   4. The confirmation sent by the RabbitMQ broker in the previous
+								 *      step is processed by the ConfirmListener (in a separate thread
+								 *      but that is not important). HOWEVER, the ConfirmsListener will
+								 *      *not* find an entry in the "pendingPublisherConfirms" map for
+								 *      the "sequence number" (delivery tag) that the RabbitMQ broker
+								 *      sent in its confirmation. HENCE, THE CONFIRMATION CANNOT BE 
+								 *      PROCESSED!
+								 *   
+								 *   5. This thread starts running again and then next thing it does 
+								 *      is to enter rabbitMQMsgAck into the "pendingPublisherConfirms"
+								 *      map, but it is too late to do this because the ConfirmsListener
+								 *      expected that entry to be there already in the previous step!
+								 */
+								logger.debug("Published msg. Entering into pendingPublisherConfirms: "
+										+ "nextPublishSeqNo = {}, rabbitMQMsgAck = {}",
+										nextPublishSeqNo, rabbitMQMsgAck);
+								pendingPublisherConfirms.put(nextPublishSeqNo, rabbitMQMsgAck);
+
 								logger.debug("Next msg from producer queue: rabbitMQMsgAck = {}", rabbitMQMsgAck);
 							}
 
@@ -221,31 +265,35 @@ public class RabbitMQProducerRunnable implements Runnable {
 									rabbitMQMsgAck.queueAck();
 								}
 
+							} catch (IOException e) {
+
+								logger.error("IOException caught publishing a message:", e);
+
 								if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
 									/*
-									 * Enter the RabbitMQMsgAck object into the "pending publisher confirms"
-									 * map. This map will be processed by the ConfirmListener added above.
+									 * Remove the entry added to the "pendingPublisherConfirms" map
+									 * above, since the message was not published successfully and we 
+									 * do not expect a confirmation from the RabbitMQ broker.
 									 */
-									logger.debug("Published msg. Entering into pendingPublisherConfirms: "
-											+ "nextPublishSeqNo = {}, rabbitMQMsgAck = {}",
-											nextPublishSeqNo, rabbitMQMsgAck);
-									pendingPublisherConfirms.put(nextPublishSeqNo, rabbitMQMsgAck);
+									logger.info("Before removing entry for key {}. pendingPublisherConfirms = {}",
+											nextPublishSeqNo, pendingPublisherConfirms);
+									pendingPublisherConfirms.remove(nextPublishSeqNo);
+									logger.info("After removing entry for key {}. pendingPublisherConfirms = {}",
+											nextPublishSeqNo, pendingPublisherConfirms);
 								}
 
-							} catch (IOException e) {
-								logger.error("IOException caught publishing a message:", e);
 								if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED
 										|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED
 										|| RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
-								/*
-									* Even for algorithm AckAlgorithms.AFTER_PUBLISHED_CONFIRMED, this
-									* enters the RabbitMQMsgAck object directly into the acknowledgement
-									* queue instead of into the "pending publisher confirms" map because
-									* we do not expect the broker to send back a publisher confirm. Testing
-									* and experience will show if this is the appropriate treatment.
-									* TODO Should we dead-letter a message when an IOException is caught?
-									*/
-								rabbitMQMsgAck.queueNack(true);  // requeue rejected message
+									/*
+									 * Even for algorithm AckAlgorithms.AFTER_PUBLISHED_CONFIRMED, this
+									 * enters the RabbitMQMsgAck object directly into the acknowledgement
+									 * queue because we do not expect the broker to send back a publisher
+									 * confirm. Testing  and experience will show if this is the 
+									 * appropriate treatment.
+									 * TODO Should we dead-letter a message when an IOException is caught? That might be better.
+									 */
+									rabbitMQMsgAck.queueNack(true);  // requeue rejected message
 								}
 							}
 

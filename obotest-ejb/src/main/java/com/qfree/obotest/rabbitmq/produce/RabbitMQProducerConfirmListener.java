@@ -60,7 +60,7 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 				 *      result, these messages will be requeued and consumed
 				 *      again then the consumer threads are restarted. If all
 				 *      messages are handled idempotently this may not have 
-				 *      serious consequneces, but it is definitely not 
+				 *      serious consequences, but it is definitely not 
 				 *      desirable.
 				 *      
 				 *   2. The producer thread that terminates because of the
@@ -85,20 +85,33 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 
 			} else {
 
-				/*
-				 * Ack the originally consumed message that was processed to
-				 * generate a message that was subsequently published and is 
-				 * now being confirmed by the broker that received it was 
-				 * handled successfully.
-				 */
-				logger.debug("Queuing ack for rabbitMQMsgAck: {}", pendingPublisherConfirms.get(deliveryTag));
-				pendingPublisherConfirms.get(deliveryTag).queueAck();
+				RabbitMQMsgAck rabbitMQMsgAck = pendingPublisherConfirms.get(deliveryTag);
+				if (rabbitMQMsgAck != null) {
 
-				/*
-				 * Remove the element just processed from the map
-				 * "pendingPublisherConfirms".
-				 */
-				pendingPublisherConfirms.remove(deliveryTag);
+					/*
+					 * Ack the originally consumed message that was processed to
+					 * generate a message that was subsequently published and is 
+					 * now being confirmed by the broker that received it was 
+					 * handled successfully.
+					 */
+					logger.debug("Queuing ack for rabbitMQMsgAck: {}", rabbitMQMsgAck);
+					rabbitMQMsgAck.queueAck();
+
+					/*
+					 * Remove the element just processed from the map
+					 * "pendingPublisherConfirms".
+					 */
+					pendingPublisherConfirms.remove(deliveryTag);
+
+				} else {
+					/*
+					 * This case should ever occur, but it will be important to
+					 * know about it if ever does. 
+					 */
+					logger.error("rabbitMQMsgAck = null. deliveryTag = {}, pendingPublisherConfirms = {}",
+							deliveryTag,
+							pendingPublisherConfirms);
+				}
 
 			}
 
@@ -150,8 +163,7 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 				for (RabbitMQMsgAck rabbitMQMsgAck : confirmedMessages.values()) {
 					logger.debug("Nacking rabbitMQMsgAck: {}", rabbitMQMsgAck);
 					/*
-					 * TODO Should the original messages be discarded/dead-lettered instead
-					 *      of being requeued?
+					 * TODO Should the original messages be discarded/dead-lettered instead of being requeued?
 					 */
 					rabbitMQMsgAck.queueNack(true);	// requeue message
 				}
@@ -165,24 +177,37 @@ public class RabbitMQProducerConfirmListener implements ConfirmListener {
 
 		} else {
 
-			/*
-			 * Nack the originally consumed message that was processed to
-			 * generate a message that was subsequently published and is 
-			 * now being confirmed by the broker that received it that it 
-			 * was NOT handled successfully.
-			 */
-			logger.debug("Nacking rabbitMQMsgAck: {}", pendingPublisherConfirms.get(deliveryTag));
-			/*
-			 * TODO Should the original messages be discarded/dead-lettered instead
-			 *      of being requeued?
-			 */
-			pendingPublisherConfirms.get(deliveryTag).queueNack(true);	// requeue message
+			RabbitMQMsgAck rabbitMQMsgAck = pendingPublisherConfirms.get(deliveryTag);
+			if (rabbitMQMsgAck != null) {
 
-			/*
-			 * Remove the element just processed from the map
-			 * "pendingPublisherConfirms".
-			 */
-			pendingPublisherConfirms.remove(deliveryTag);
+				/*
+				 * Nack the originally consumed message that was processed to
+				 * generate a message that was subsequently published and is 
+				 * now being confirmed by the broker that received it that it 
+				 * was NOT handled successfully.
+				 */
+				logger.debug("Nacking rabbitMQMsgAck: {}", pendingPublisherConfirms.get(deliveryTag));
+				/*
+				 * TODO Should the original messages be discarded/dead-lettered instead
+				 *      of being requeued?
+				 */
+				pendingPublisherConfirms.get(deliveryTag).queueNack(true);	// requeue message
+
+				/*
+				 * Remove the element just processed from the map
+				 * "pendingPublisherConfirms".
+				 */
+				pendingPublisherConfirms.remove(deliveryTag);
+
+			} else {
+				/*
+					 * This case should ever occur, but it will be important to
+					 * know about it if ever does. 
+				 */
+				logger.error("rabbitMQMsgAck = null. deliveryTag = {}, pendingPublisherConfirms = {}",
+						deliveryTag,
+						pendingPublisherConfirms);
+			}
 
 		}
 
