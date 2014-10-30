@@ -22,6 +22,13 @@ public class RequestHeadersServlet extends HttpServlet {
 
 	private static final Logger logger = LoggerFactory.getLogger(RequestHeadersServlet.class);
 
+	/*
+	 * EJBs can be injected with the @EJB annotation if this class is annotated
+	 * with @WebServlet.
+	 */
+	//	@EJB
+	//	RabbitMQConsumerController rabbitMQConsumerController;
+
 	public RequestHeadersServlet() {
 		super();
 	}
