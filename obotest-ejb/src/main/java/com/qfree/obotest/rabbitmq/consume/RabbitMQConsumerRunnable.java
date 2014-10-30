@@ -60,23 +60,31 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * When true, message consumption will be disabled. This variable is set 
 	 * the the logical OR of other "throttled" variables that are set true or
 	 * false based on specific conditions.
+	 * 
+	 * At the time this was written, all conditions evaluate the same for each 
+	 * consumer thread; hence, this variable as well as the other "throttled" 
+	 * variables, could be made "public static". However, in order to be able to
+	 * handle conditions that might be different for different consumer thread, 
+	 * these variables have been made private member attributes with getters.
 	 */
-//	public static volatile boolean throttled = false;
-	public static volatile boolean throttled = false;
+	private volatile boolean throttled = false;
+	//	public static volatile boolean throttled = false;
 	/**
 	 * Set to true when the number of free elements available in the 
 	 * producerMsgQueue queue drops below QUEUE_REMAINING_CAPACITY_LOW_WATER. It
 	 * will then stay false until the number of free elements subsequently rises
 	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
 	 */
-	public static volatile boolean throttled_ProducerMsgQueue = false;
+	private volatile boolean throttled_ProducerMsgQueue = false;
+	//	public static volatile boolean throttled_ProducerMsgQueue = false;
 	/**
 	 * Set to true when the number of free elements available in the 
 	 * producerMsgQueue queue drops below QUEUE_REMAINING_CAPACITY_LOW_WATER. It
 	 * will then stay false until the number of free elements subsequently rises
 	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
 	 */
-	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
+	private volatile boolean throttled_UnacknowledgedCDIEvents = false;
+	//	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
 
 	/*
 	 * Set in the constructor
@@ -115,6 +123,18 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	public RabbitMQConsumerRunnable(RabbitMQConsumerHelper messageConsumerHelper) {
 		super();
 		this.messageConsumerHelper = messageConsumerHelper;
+	}
+
+	public boolean isThrottled() {
+		return throttled;
+	}
+
+	public boolean isThrottled_ProducerMsgQueue() {
+		return throttled_ProducerMsgQueue;
+	}
+
+	public boolean isThrottled_UnacknowledgedCDIEvents() {
+		return throttled_UnacknowledgedCDIEvents;
 	}
 
 	public BlockingQueue<RabbitMQMsgAck> getAcknowledgementQueue() {
@@ -213,9 +233,9 @@ public class RabbitMQConsumerRunnable implements Runnable {
 													.availablePermits(),
 									RabbitMQProducerController.producerMsgQueue.size(),
 									acknowledgementQueue.size(),
-									new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-									new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-									new Boolean(RabbitMQConsumerRunnable.throttled)
+									new Boolean(throttled_ProducerMsgQueue),
+									new Boolean(throttled_UnacknowledgedCDIEvents),
+									new Boolean(throttled)
 									);
 
 							if (!throttled) {

@@ -60,7 +60,7 @@ public class RabbitMQMonitorConsumersController {
 					RabbitMQConsumerRunnable rabbitMQConsumerRunnable =
 							RabbitMQConsumerController.rabbitMQConsumerRunnables.get(threadIndex);
 					if (rabbitMQConsumerRunnable != null) {
-					ack_queue_size = rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
+						ack_queue_size = rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
 					} else {
 						/*
 						 * This case will occur if this was called before the consumer  
@@ -88,11 +88,53 @@ public class RabbitMQMonitorConsumersController {
 		return RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH;  // independent of "thread"
 	}
 
-	//	@GET
-	//	@Path("/{thread}/throttled")
-	//	@Produces("text/plain;v=1")
-	//	public int throttled(@PathParam("thread") int thread) {
-	//		return ;
-	//	}
+	@GET
+	@Path("/{thread}/throttled")
+	@Produces("text/plain;v=1")
+	public int throttled(@PathParam("thread") int thread) {
+
+		logger.info("/throttled requested for consumer thread #{}", thread);
+
+		boolean throttled = false;
+		if (RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS == 1) {
+
+			if (RabbitMQConsumerController.rabbitMQConsumerRunnable != null) {
+				throttled = RabbitMQConsumerController.rabbitMQConsumerRunnable.isThrottled();
+			} else {
+				/*
+				 * This case will occur if this was called before the consumer  
+				 * threads have been started.
+				 */
+			}
+
+		} else {
+
+			if (RabbitMQConsumerController.rabbitMQConsumerRunnables != null) {
+				if ((thread <= RabbitMQConsumerController.rabbitMQConsumerRunnables.size()) && (thread >= 1)) {
+					/* 
+					 * "threadIndex" is zero-based, but "thread" is one-based.
+					 */
+					int threadIndex = thread - 1;
+					RabbitMQConsumerRunnable rabbitMQConsumerRunnable =
+							RabbitMQConsumerController.rabbitMQConsumerRunnables.get(threadIndex);
+					if (rabbitMQConsumerRunnable != null) {
+						throttled = rabbitMQConsumerRunnable.isThrottled();
+					} else {
+						/*
+						 * This case will occur if this was called before the consumer  
+						 * threads have been started.
+						 */
+					}
+				} else {
+					logger.error("thread = {}. Value must be in range [0,{}].", thread,
+							RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS);
+				}
+			} else {
+				logger.error("rabbitMQConsumerController.rabbitMQConsumerRunnables is null. thread = {}", thread);
+			}
+
+		}
+		return throttled ? 1 : 0;
+	}
 
 }

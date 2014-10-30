@@ -19,7 +19,6 @@ import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
-import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
 @Stateless
@@ -48,20 +47,15 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 * UE:  number of Unacknowledged CDI Events
 		 * MH:  number of message handlers running
 		 * PQ:  number of elements in the producer message queue
-		 * AQ:  number of elements in the acknowledgement queue
 		 */
-		logger.debug(
-				"UE={}, MH={}, PQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
+		logger.debug("UE={}, MH={}, PQ={}",
 				RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
 						- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
 								.availablePermits(),
 				RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 						RabbitMQConsumerController.messageHandlerCounterSemaphore
 								.availablePermits(),
-				RabbitMQProducerController.producerMsgQueue.size(),
-				new Boolean(RabbitMQConsumerRunnable.throttled_ProducerMsgQueue),
-				new Boolean(RabbitMQConsumerRunnable.throttled_UnacknowledgedCDIEvents),
-				new Boolean(RabbitMQConsumerRunnable.throttled)
+				RabbitMQProducerController.producerMsgQueue.size()
 				);
 
 		/*
