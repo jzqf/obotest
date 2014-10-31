@@ -3,6 +3,7 @@ package com.qfree.obotest.rest.monitoring.rabbitmq;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -29,11 +30,13 @@ public class RabbitMQMonitorConsumersController {
 	}
 
 	@GET
+	//TODO Use path parameters for subcommands, instead of so many methods here
 	@Path("/{thread}/ack_queue/size")
 	@Produces("text/plain;v=1")
-	public int ack_queue_size(@PathParam("thread") int thread) {
+	public int ack_queue_size_v1(@PathParam("thread") int thread, @HeaderParam("Accept") String acceptHeader) {
 		
 		logger.info("/ack_queue/size requested for consumer thread #{}", thread);
+		logger.info("acceptHeader = {}", acceptHeader);
 
 		int ack_queue_size = -1;
 
