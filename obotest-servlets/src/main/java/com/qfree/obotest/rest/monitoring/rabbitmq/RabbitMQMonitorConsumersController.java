@@ -30,41 +30,57 @@ public class RabbitMQMonitorConsumersController {
 	}
 
 	@GET
-	//TODO Use path parameters for subcommands, instead of so many methods here
-	@Path("/{thread}/ack_queue/size")
+	@Path("/state")
 	@Produces("text/plain;v=1")
-	public int ack_queue_size_v1(@PathParam("thread") int thread, @HeaderParam("Accept") String acceptHeader) {
-		
-		logger.info("/ack_queue/size requested for consumer thread #{}", thread);
-		logger.info("acceptHeader = {}", acceptHeader);
-
-		int ack_queue_size = -1;
-
-		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
-		if (rabbitMQConsumerRunnable != null) {
-			ack_queue_size = rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
-		} else {
-			/*
-			 * This case can occur if this code is called before the 
-			 * consumer threads have been started.
-			 */
-		}
-		return ack_queue_size;
+	public String state() {
+		return RabbitMQConsumerController.state.toString();
 	}
 
 	@GET
-	@Path("/{thread}/ack_queue/capacity")
+	@Path("/{thread}/ack_queue/{subCommand}")
 	@Produces("text/plain;v=1")
-	public int ack_queue_capacity(@PathParam("thread") int thread) {
-		return RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH;  // independent of "thread"
+	public int ack_queue_size_v1(@PathParam("thread") int thread,
+			@PathParam("subCommand") String subCommand,
+			@HeaderParam("Accept") String acceptHeader) {
+		
+		//logger.info("/ack_queue/size requested for consumer thread #{}", thread);
+		//logger.info("acceptHeader = {}", acceptHeader);
+
+		int ack_queue_value = -1;
+
+		if (subCommand.equals("size")) {
+
+			RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
+			if (rabbitMQConsumerRunnable != null) {
+				ack_queue_value = rabbitMQConsumerRunnable.getAcknowledgementQueue().size();
+			} else {
+				/*
+				 * This case can occur if this code is called before the 
+				 * consumer threads have been started.
+				 */
+			}
+
+		} else if (subCommand.equals("capacity")) {
+
+			ack_queue_value = RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH;  // independent of "thread"
+
+		}
+		return ack_queue_value;
 	}
+
+	//	@GET
+	//	@Path("/{thread}/ack_queue/capacity")
+	//	@Produces("text/plain;v=1")
+	//	public int ack_queue_capacity(@PathParam("thread") int thread) {
+	//		return RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH;  // independent of "thread"
+	//	}
 
 	@GET
 	@Path("/{thread}/throttled")
 	@Produces("text/plain;v=1")
 	public int throttled(@PathParam("thread") int thread) {
 
-		logger.info("/throttled requested for consumer thread #{}", thread);
+		//logger.info("/throttled requested for consumer thread #{}", thread);
 
 		boolean throttled = false;
 
@@ -81,11 +97,11 @@ public class RabbitMQMonitorConsumersController {
 	}
 
 	@GET
-	@Path("/{thread}/throttled_producer_msg_queue")
+	@Path("/{thread}/throttled_publisher_msg_queue")
 	@Produces("text/plain;v=1")
-	public int throttled_producer_msg_queue(@PathParam("thread") int thread) {
+	public int throttled_publisher_msg_queue(@PathParam("thread") int thread) {
 
-		logger.info("/throttled_producer_msg_queue requested for consumer thread #{}", thread);
+		//logger.info("/throttled_publisher_msg_queue requested for consumer thread #{}", thread);
 
 		boolean throttled_producer_msg_queue = false;
 
@@ -106,7 +122,7 @@ public class RabbitMQMonitorConsumersController {
 	@Produces("text/plain;v=1")
 	public int throttled_unacked_async_calls(@PathParam("thread") int thread) {
 
-		logger.info("/throttled_unacked_async_calls requested for consumer thread #{}", thread);
+		//logger.info("/throttled_unacked_async_calls requested for consumer thread #{}", thread);
 
 		boolean throttled_unacked_async_calls = false;
 
@@ -119,6 +135,9 @@ public class RabbitMQMonitorConsumersController {
 			 * consumer threads have been started.
 			 */
 		}
+		logger.info(
+				"/throttled_unacked_async_calls requested for consumer thread #{}.\n    throttled_unacked_async_calls={}, (throttled_unacked_async_calls ? 1 : 0)={}",
+				thread, throttled_unacked_async_calls, throttled_unacked_async_calls ? 1 : 0);
 		return throttled_unacked_async_calls ? 1 : 0;
 	}
 
@@ -130,7 +149,7 @@ public class RabbitMQMonitorConsumersController {
 	 */
 	private RabbitMQConsumerRunnable getRabbitMQConsumerRunnable(int threadIndex) {
 
-		logger.info("RabbitMQConsumerRunnable requested for thread index #{}", threadIndex);
+		//logger.info("RabbitMQConsumerRunnable requested for thread index #{}", threadIndex);
 
 		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = null;
 
@@ -139,7 +158,7 @@ public class RabbitMQMonitorConsumersController {
 			if (threadIndex == 0) {
 				rabbitMQConsumerRunnable = RabbitMQConsumerController.rabbitMQConsumerRunnable;
 			} else {
-				logger.error("threadIndex = {}. The only legal value here is 0.", threadIndex);
+				//logger.error("threadIndex = {}. The only legal value here is 0.", threadIndex);
 			}
 
 		} else {
