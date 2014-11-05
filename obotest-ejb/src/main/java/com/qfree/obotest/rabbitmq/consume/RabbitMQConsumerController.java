@@ -90,9 +90,22 @@ public class RabbitMQConsumerController {
 
 	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_PUBLISHED_CONFIRMED;
 
-	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
+	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 1;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
 	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
+
+	/*
+	 * If true, RabbitMQMsgEnvelope objects will be passed to the message
+	 * handlers by firing a "CDI event"; otherwise, a direct call to the 
+	 * message handler will be made.
+	 */
+	public static final boolean MESSAGE_HANDLER_USE_CDI_EVENTS = false;
+	/*
+	 * If true, the message handlers will be invoked using an asynchronous
+	 * mechanism. This mechanism can be either a direct call or by firing a CDI
+	 * event, according to the setting of MESSAGE_HANDLER_USE_CDI_EVENTS.
+	 */
+	public static final boolean MESSAGE_HANDLER_ASYNCHRONOUS_CALLS = false;
 
 	/*
 	 * This is the maximum number of message handler threads that are allowed to

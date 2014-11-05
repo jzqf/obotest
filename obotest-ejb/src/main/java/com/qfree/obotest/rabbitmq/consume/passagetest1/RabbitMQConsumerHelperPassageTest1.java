@@ -11,9 +11,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.qfree.obotest.eventlistener.ConsumerMsgHandlerPassageTest1;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_sync;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerHelper;
@@ -71,8 +73,15 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 	private QueueingConsumer consumer = null;
 
 	@Inject
+	ConsumerMsgHandlerPassageTest1 consumerMsgHandler;
+
+	@Inject
+	@RabbitMQMsgEnvelopeQualifier_sync
+	Event<RabbitMQMsgEnvelope> rabbitMQMsgEnvelopeEvent_sync;
+
+	@Inject
 	@RabbitMQMsgEnvelopeQualifier_async
-	Event<RabbitMQMsgEnvelope> rabbitMQMsgEnvelopeEvent;
+	Event<RabbitMQMsgEnvelope> rabbitMQMsgEnvelopeEvent_async;
 
 	/*
 	 * This set was used to detect the situation where it appears that there
@@ -253,36 +262,48 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 
 			logger.debug("Received passage message: deliveryTag={}, {} bytes", deliveryTag, messageBytes.length);
 
-			if (false) {
+			if (RabbitMQConsumerController.MESSAGE_HANDLER_USE_CDI_EVENTS) {
 				/*
-				 * TODO Use this case to test directly calling a method of an injected class.
-				 *      Test both asynchronous and synchronous calls.
+				 * Process the message in another method by firing a CDI event 
+				 * here that is received by a method whose parameter is 
+				 * annotated with @Observes and an appropriate qualifier.
 				 */
+				if (RabbitMQConsumerController.MESSAGE_HANDLER_ASYNCHRONOUS_CALLS) {
+					/*
+					 * Process the message asynchronously in another thread. For
+					 * this to work, the parameter of target method must be 
+					 * annotated with:
+					 *     @RabbitMQMsgEnvelopeQualifier_async
+					 */
+					logger.debug("Firing CDI event asynchronously for {}...", rabbitMQMsgEnvelope);
+					rabbitMQMsgEnvelopeEvent_async.fire(rabbitMQMsgEnvelope);
+				} else {
+					/*
+					 * Process the message synchronously in this thread. For
+					 * this to work, the parameter of target method must be 
+					 * annotated with:
+					 *     @RabbitMQMsgEnvelopeQualifier_sync
+					 */
+					logger.debug("Firing CDI event synchronously for {}...", rabbitMQMsgEnvelope);
+					rabbitMQMsgEnvelopeEvent_sync.fire(rabbitMQMsgEnvelope);
+				}
 			} else {
-
 				/*
-				 * TOD Create two versions of the @Observes method, each with a different qualifier.
-				 *     The names of these qualifiers can be the same, but end with either "_sync" or
-				 *     "_async". As these names indicate, the one ending with "_async" should be
-				 *     annotated with @Asynchronous. We can use a configuration parameter to select
-				 *     which method to call. The "_async" method can just call the "_sync" method
-				 *     to avoid as much code duplication as possible.
+				 * Process the message by directly calling a method, the
+				 * traditional way.
 				 */
-
-				logger.debug("Firing CDI event for {}, UnackedAvailPermits={}", rabbitMQMsgEnvelope,
-						RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits());
-
-				/*
-				 * Process the message asynchronously in another thread that 
-				 * receives a CDI event that is fired here from this thread.
-				 */
-				rabbitMQMsgEnvelopeEvent.fire(rabbitMQMsgEnvelope);
-
-				logger.debug("Returned from firing event");
+				if (RabbitMQConsumerController.MESSAGE_HANDLER_ASYNCHRONOUS_CALLS) {
+					logger.debug("Asynchronous call to message handler. rabbitMQMsgEnvelope={}...", rabbitMQMsgEnvelope);
+					consumerMsgHandler.processMessage_async(rabbitMQMsgEnvelope);
+				} else {
+					logger.debug("Synchronous call to message handler. rabbitMQMsgEnvelope={}...", rabbitMQMsgEnvelope);
+					logger.info("consumerMsgHandler = {}", consumerMsgHandler);
+					consumerMsgHandler.processMessage_sync(rabbitMQMsgEnvelope);
+				}
 			}
 
 		} else {
-			logger.info("********** NO MESSAGE **********"); //TODO DELETEME
+			logger.info("********** NO MESSAGE **********"); //TODO DELETEME OR JUST COMMENT OUT?
 			/*
 			 * This just means that there were no messages to consume after
 			 * waiting the timeout period. This in perfectly normal. The 

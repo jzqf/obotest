@@ -226,15 +226,15 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							 * AQ:  number of elements in the acknowledgement queue
 							 */
 							logger.info(
-									"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
+									"UE={}, MH={}, PQ={}, AQ={}, UE-Throt={}, PQ-Throt={}, Throt={}",
 									numUnacknowledgeCDIEvents,
 									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 											RabbitMQConsumerController.messageHandlerCounterSemaphore
 													.availablePermits(),
 									RabbitMQProducerController.producerMsgQueue.size(),
 									acknowledgementQueue.size(),
-									new Boolean(throttled_ProducerMsgQueue),
 									new Boolean(throttled_UnacknowledgedCDIEvents),
+									new Boolean(throttled_ProducerMsgQueue),
 									new Boolean(throttled)
 									);
 
@@ -258,6 +258,11 @@ public class RabbitMQConsumerRunnable implements Runnable {
 									 */
 									RabbitMQMsgEnvelope rabbitMQMsgEnvelope = new RabbitMQMsgEnvelope(rabbitMQMsgAck,
 											null);
+
+									logger.debug(
+											"Calling handleNextDelivery(rabbitMQMsgEnvelope). UnackedAvailPermits={}...",
+											RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+													.availablePermits());
 
 									try {
 

@@ -17,12 +17,20 @@ import com.qfree.obotest.protobuf.PassageTest1Protos;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;
+import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_sync;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.AckAlgorithms;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 
 @Stateless
 @LocalBean
+/*
+ * TODO Implement an interface here to enable flexible dependency injection
+ *      For example ConsumerMsgHandler. Then, replace ConsumerMsgHandlerPassageTest1
+ *      with ConsumerMsgHandler in RabbitMQConsumerHelperPassageTest1 and use
+ *      CDI "Alternatives to select an implementation if there ever is more 
+ *      than one.
+ */
 public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 
 	private static final Logger logger = LoggerFactory.getLogger(ConsumerMsgHandlerPassageTest1.class);
@@ -36,6 +44,14 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 	@Asynchronous
 	public void processMessage_async(
 			@Observes @RabbitMQMsgEnvelopeQualifier_async RabbitMQMsgEnvelope rabbitMQMsgEnvelope) {
+		/*
+		 * Delegate to the synchronous method.
+		 */
+		processMessage_sync(rabbitMQMsgEnvelope);
+	}
+
+	public void processMessage_sync(
+			@Observes @RabbitMQMsgEnvelopeQualifier_sync RabbitMQMsgEnvelope rabbitMQMsgEnvelope) {
 
 		/* 
 		 * Release the permit that was acquired just before the CDI event that
