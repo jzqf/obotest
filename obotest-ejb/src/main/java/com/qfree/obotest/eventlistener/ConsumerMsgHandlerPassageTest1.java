@@ -59,6 +59,8 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 */
 		RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
 
+		//	logger.info("this = {}", this);
+
 		/*
 		 * UE:  number of Unacknowledged CDI Events
 		 * MH:  number of message handlers running

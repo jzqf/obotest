@@ -292,12 +292,12 @@ public abstract class RabbitMQConsumerHelperPassageTest1 implements RabbitMQCons
 				 * Process the message by directly calling a method, the
 				 * traditional way.
 				 */
+				//logger.info("consumerMsgHandler = {}", consumerMsgHandler);
 				if (RabbitMQConsumerController.MESSAGE_HANDLER_ASYNCHRONOUS_CALLS) {
 					logger.debug("Asynchronous call to message handler. rabbitMQMsgEnvelope={}...", rabbitMQMsgEnvelope);
 					consumerMsgHandler.processMessage_async(rabbitMQMsgEnvelope);
 				} else {
 					logger.debug("Synchronous call to message handler. rabbitMQMsgEnvelope={}...", rabbitMQMsgEnvelope);
-					logger.info("consumerMsgHandler = {}", consumerMsgHandler);
 					consumerMsgHandler.processMessage_sync(rabbitMQMsgEnvelope);
 				}
 			}

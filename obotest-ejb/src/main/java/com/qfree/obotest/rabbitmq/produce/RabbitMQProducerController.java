@@ -73,8 +73,6 @@ public class RabbitMQProducerController {
 	/*
 	 * This queue holds the RabbitMQ messages waiting to be sent to a RabbitMQ
 	 * message broker. Messages can be entered into this queue using:
-	 * 
-	 *     boolean sent = send(byte[] bytes);
 	 */
 	public static final BlockingQueue<RabbitMQMsgEnvelope> producerMsgQueue = new LinkedBlockingQueue<>(
 			PRODUCER_BLOCKING_QUEUE_LENGTH);

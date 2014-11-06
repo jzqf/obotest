@@ -90,7 +90,7 @@ public class RabbitMQConsumerController {
 
 	public static final AckAlgorithms ackAlgorithm = AckAlgorithms.AFTER_PUBLISHED_CONFIRMED;
 
-	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 1;
+	public static final int NUM_RABBITMQ_CONSUMER_THREADS = 2;
 	private static final long DELAY_BEFORE_STARTING_RABBITMQ_CONSUMER_MS = 4000;
 	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
 
@@ -105,7 +105,7 @@ public class RabbitMQConsumerController {
 	 * mechanism. This mechanism can be either a direct call or by firing a CDI
 	 * event, according to the setting of MESSAGE_HANDLER_USE_CDI_EVENTS.
 	 */
-	public static final boolean MESSAGE_HANDLER_ASYNCHRONOUS_CALLS = false;
+	public static final boolean MESSAGE_HANDLER_ASYNCHRONOUS_CALLS = true;
 
 	/*
 	 * This is the maximum number of message handler threads that are allowed to
