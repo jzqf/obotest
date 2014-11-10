@@ -135,7 +135,7 @@ public class RabbitMQMonitorConsumersController {
 			 * consumer threads have been started.
 			 */
 		}
-		logger.info(
+		logger.debug(
 				"/throttled_unacked_async_calls requested for consumer thread #{}.\n    throttled_unacked_async_calls={}, (throttled_unacked_async_calls ? 1 : 0)={}",
 				thread, throttled_unacked_async_calls, throttled_unacked_async_calls ? 1 : 0);
 		return throttled_unacked_async_calls ? 1 : 0;
