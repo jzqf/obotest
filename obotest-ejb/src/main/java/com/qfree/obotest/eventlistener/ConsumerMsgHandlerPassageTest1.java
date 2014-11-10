@@ -62,12 +62,12 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		//	logger.info("this = {}", this);
 
 		/*
-		 * UE:  number of Unacknowledged CDI Events
+		 * UAC:  number of Unserviced Asynchronous Calls
 		 * MH:  number of message handlers running
 		 * PQ:  number of elements in the producer message queue
 		 */
 		logger.debug("UE={}, MH={}, PQ={}",
-				RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+				RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX
 						- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
 								.availablePermits(),
 				RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
@@ -102,11 +102,11 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 				String filename = passage.getImageName();
 				byte[] imageBytes = passage.getImage().toByteArray();
 
-				//				try {
-				//					logger.debug("Sleeping for 100 ms to simulate doing some work...");
-				//					Thread.sleep(100);		// simulate doing some work
-				//				} catch (InterruptedException e) {
-				//				}
+				try {
+					logger.debug("Sleeping for 200 ms to simulate doing some work...");
+					Thread.sleep(200);		// simulate doing some work
+				} catch (InterruptedException e) {
+				}
 
 				/*
 				 * Send the result of the processing as a RabbitMQ message to a 

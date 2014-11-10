@@ -127,7 +127,7 @@ public class RabbitMQConsumerController {
 	 * created. We should never reach this limit. It needs to be large enough so
 	 * that we never block when attempting to acquire a permit.
 	 */
-	public static final int MAX_UNACKNOWLEDGED_CDI_EVENTS = 100;
+	public static final int UNSERVICED_ASYNC_CALLS_MAX = 100;
 
 	/*
 	 * This is the size of the queue that holds RabbitMQMsgAck objects sent
@@ -137,21 +137,22 @@ public class RabbitMQConsumerController {
 	public static final int ACKNOWLEDGEMENT_QUEUE_LENGTH = 2000;	//TODO Optimize queue size?
 
 	/*
-	 * This counting semaphore is used to count the number of CDI events that 
-	 * have been fired from one of the RabbitMQ consumer threads but which have
-	 * not yet been acknowledged by a stateless session been that receives the 
-	 * event in one of its methods that is annotated with @Observes. The number
-	 * of unacknowledged CDI events is used to throttle the RabbitMQ consumer
-	 * threads so that we do not fire a large number of CDI events that are not
-	 * acknowledged in a timely fashion. This is done to try to strike a balance
+	 * This counting semaphore is used to count the number of asynchronous calls
+	 * or the number of CDI events that have been fired from one of the RabbitMQ
+	 * consumer threads but which have not yet being serviced by a stateless 
+	 * session been that begins executing the call or receives the event in one 
+	 * of its methods that is annotated with @Observes. This number is used to 
+	 * throttle the RabbitMQ consumer threads so that we do not initiate too 
+	 * many asynchronous calls or fire too many CDI events that cannot be 
+	 * serviced in a timely fashion. This is done to try to strike a balance
 	 * between the rate that RabbitMQ messages are consumed and the rate at 
 	 * which they can be processed and then published back to another RabbitMQ
-	 * exchanged. If the number of unacknowledged CDI events exceeds
-	 * UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER, throttling will be invoked until
-	 * the number of unacknowledged CDI events drops below
-	 * UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER. These limits are defined elsewhere.
+	 * exchanged. If the number of unserviced asynchronous call exceeds
+	 * UNSERVICED_ASYNC_CALLS_HIGH_WATER, throttling will be invoked until
+	 * the number of unserviced asynchronous call drops below
+	 * UNSERVICED_ASYNC_CALLS_LOW_WATER. These limits are defined elsewhere.
 	 */
-	public static final Semaphore unacknowledgeCDIEventsCounterSemaphore = new Semaphore(MAX_UNACKNOWLEDGED_CDI_EVENTS);
+	public static final Semaphore unacknowledgeCDIEventsCounterSemaphore = new Semaphore(UNSERVICED_ASYNC_CALLS_MAX);
 
 	/*
 	 * This counting semaphore is used to count the number of threads that are

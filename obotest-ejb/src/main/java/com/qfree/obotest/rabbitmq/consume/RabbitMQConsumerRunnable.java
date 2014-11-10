@@ -33,8 +33,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 	private static final int QUEUE_REMAINING_CAPACITY_LOW_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH / 3;
 	private static final int QUEUE_REMAINING_CAPACITY_HIGH_WATER = RabbitMQProducerController.PRODUCER_BLOCKING_QUEUE_LENGTH * 2 / 3;
-	private static final int UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER = 2;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER?
-	private static final int UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER = 8;	//TODO Optimize UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER?
+	private static final int UNSERVICED_ASYNC_CALLS_LOW_WATER = 2;	//TODO Optimize UNSERVICED_ASYNC_CALLS_LOW_WATER?
+	private static final int UNSERVICED_ASYNC_CALLS_HIGH_WATER = 8;	//TODO Optimize UNSERVICED_ASYNC_CALLS_HIGH_WATER?
 
 	private static final long SHORT_SLEEP_MS = 200;
 	private static final long LONG_SLEEP_MS = 1000;
@@ -81,12 +81,12 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	/**
 	 * Set to true when the number of permits acquired for the
 	 * RabbitMQProducerController.unacknowledgeCDIEventsCounterSemaphore 
-	 * semaphore rises above UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER. It will then 
+	 * semaphore rises above UNSERVICED_ASYNC_CALLS_HIGH_WATER. It will then 
 	 * stay false until the number of acquired permits subsequently drops below 
-	 * UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER.
+	 * UNSERVICED_ASYNC_CALLS_LOW_WATER.
 	 */
-	private volatile boolean throttled_UnacknowledgedCDIEvents = false;
-	//	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
+	private volatile boolean throttled_UnservicedAsyncCalls = false;
+	//	public static volatile boolean throttled_UnservicedAsyncCalls = false;
 	
 	/*
 	 * Set in the constructor
@@ -135,8 +135,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 		return throttled_ProducerMsgQueue;
 	}
 
-	public boolean isThrottled_UnacknowledgedCDIEvents() {
-		return throttled_UnacknowledgedCDIEvents;
+	public boolean isThrottled_UnservicedAsyncCalls() {
+		return throttled_UnservicedAsyncCalls;
 	}
 
 	public BlockingQueue<RabbitMQMsgAck> getAcknowledgementQueue() {
@@ -203,39 +203,39 @@ public class RabbitMQConsumerRunnable implements Runnable {
 								}
 							}
 
-							// Update "throttled_UnacknowledgedCDIEvents", if necessary:
-							int numUnacknowledgeCDIEvents = RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS
+							// Update "throttled_UnservicedAsyncCalls", if necessary:
+							int numUnservicedAsyncCalls = RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX
 									- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
 											.availablePermits();
-							if (throttled_UnacknowledgedCDIEvents) {
-								if (numUnacknowledgeCDIEvents <= UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER) {
+							if (throttled_UnservicedAsyncCalls) {
+								if (numUnservicedAsyncCalls <= UNSERVICED_ASYNC_CALLS_LOW_WATER) {
 									logger.debug("Consumption throttling based on unacknowldeged CDI events is now *off*");
-									throttled_UnacknowledgedCDIEvents = false;
+									throttled_UnservicedAsyncCalls = false;
 								}
 							} else {
-								if (numUnacknowledgeCDIEvents >= UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER) {
+								if (numUnservicedAsyncCalls >= UNSERVICED_ASYNC_CALLS_HIGH_WATER) {
 									logger.debug("Consumption throttling based on unacknowldeged CDI events is now *on*");
-									throttled_UnacknowledgedCDIEvents = true;
+									throttled_UnservicedAsyncCalls = true;
 								}
 							}
 
-							throttled = throttled_ProducerMsgQueue || throttled_UnacknowledgedCDIEvents;
+							throttled = throttled_ProducerMsgQueue || throttled_UnservicedAsyncCalls;
 
 							/*
-							 * UE:  number of Unacknowledged CDI Events
+							 * UAC:  number of Unserviced Asynchronous Calls
 							 * MH:  number of message handlers running
 							 * PQ:  number of elements in the producer message queue
 							 * AQ:  number of elements in the acknowledgement queue
 							 */
 							logger.info(
 									"UE={}, MH={}, PQ={}, AQ={}, UE-Throt={}, PQ-Throt={}, Throt={}",
-									numUnacknowledgeCDIEvents,
+									numUnservicedAsyncCalls,
 									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 											RabbitMQConsumerController.messageHandlerCounterSemaphore
 													.availablePermits(),
 									RabbitMQProducerController.producerMsgQueue.size(),
 									acknowledgementQueue.size(),
-									new Boolean(throttled_UnacknowledgedCDIEvents),
+									new Boolean(throttled_UnservicedAsyncCalls),
 									new Boolean(throttled_ProducerMsgQueue),
 									new Boolean(throttled)
 									);
@@ -602,7 +602,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				 * But to be more-or-less sure that an empty acknowledgement
 				 * queue stays that way, we check *first* that:
 				 * 
-				 *   1. There are no unacknowledged CDI events.
+				 *   1. There are no unserviced asynchronous call.
 				 *   2.	There are no message handlers still running
 				 *   3. The producer message queue is empty.
 				 * 
@@ -643,7 +643,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 					}
 				} else {
 					logger.info(
-							"Request to stop detected, but there are still {} unacknowledged CDI events.",
+							"Request to stop detected, but there are still {} unserviced asynchronous call.",
 							unacknowledgedCDIEventPermits());
 				}
 			} else {
@@ -661,14 +661,14 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	}
 
 	/**
-	 * Returns the number of unacknowledged CDI events. These correspond to CDI
+	 * Returns the number of unserviced asynchronous call. These correspond to CDI
 	 * events that have been fired, but not received by a message handler by its
 	 * @Observes method.
 	 * 
 	 * @return the number of message handler permits currently acquired
 	 */
 	private int unacknowledgedCDIEventPermits() {
-		return RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS -
+		return RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX -
 				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
 	}
 

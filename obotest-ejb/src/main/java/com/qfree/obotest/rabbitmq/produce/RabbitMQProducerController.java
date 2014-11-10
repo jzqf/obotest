@@ -341,12 +341,12 @@ public class RabbitMQProducerController {
 		 * wait for those outstanding CDI events to be received and acknowledged
 		 * by message handlers. 
 		 */
-		logger.info("Waiting for unacknowledged CDI events to be acknowledged by message handlers...");
+		logger.info("Waiting for unserviced asynchronous call to be acknowledged by message handlers...");
 		waitForAllCDIEventsToBeAcknowledged();
 
 		/*
 		 * Now that the consumer thread(s) are disabled and there are no 
-		 * unacknowledged CDI events, there will be no new incoming messages to
+		 * unserviced asynchronous call, there will be no new incoming messages to
 		 * process, but some message handler threads may still be busy 
 		 * processing incoming messages that were received a little earlier. We
 		 * must wait for those message handler threads to  finish their 
@@ -447,7 +447,7 @@ public class RabbitMQProducerController {
 	}
 
 	/**
-	 * Waits for all unacknowledged CDI events, if any, to be acknowledged by 
+	 * Waits for all unserviced asynchronous call, if any, to be acknowledged by 
 	 * message handlers. These correspond to CDI events that have been fired,
 	 * but not received by a message handler by its @Observes method.
 	 */
@@ -699,7 +699,7 @@ public class RabbitMQProducerController {
 	}
 
 	/**
-	 * Returns the number of unacknowledged CDI events. These correspond to CDI
+	 * Returns the number of unserviced asynchronous call. These correspond to CDI
 	 * events that have been fired, but not received by a message handler by its
 	 * @Observes method.
 	 * 
@@ -707,7 +707,7 @@ public class RabbitMQProducerController {
 	 */
 	@Lock(LockType.READ)
 	private int unacknowledgedCDIEventPermits() {
-		return RabbitMQConsumerController.MAX_UNACKNOWLEDGED_CDI_EVENTS -
+		return RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX -
 				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
 	}
 
