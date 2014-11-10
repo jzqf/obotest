@@ -31,11 +31,18 @@ public class RabbitMQMonitorPublishersController {
 	}
 
 	@GET
+	@Path("/state")
+	@Produces("text/plain;v=1")
+	public String state() {
+		return RabbitMQProducerController.state.toString();
+	}
+
+	@GET
 	@Path("/{thread}/pending_publisher_acks")
 	@Produces("text/plain;v=1")
 	public int pending_publisher_acks(@PathParam("thread") int thread) {
 		
-		logger.info("/pending_publisher_acks requested for publisher thread #{}", thread);
+		//logger.info("/pending_publisher_acks requested for publisher thread #{}", thread);
 
 		int pending_publisher_acks = -1;
 
@@ -59,7 +66,7 @@ public class RabbitMQMonitorPublishersController {
 	 */
 	private RabbitMQProducerRunnable getRabbitMQProducerRunnable(int threadIndex) {
 
-		logger.info("RabbitMQProducerRunnable requested for thread index #{}", threadIndex);
+		//logger.info("RabbitMQProducerRunnable requested for thread index #{}", threadIndex);
 
 		RabbitMQProducerRunnable rabbitMQProducerRunnable = null;
 

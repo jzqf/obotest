@@ -95,6 +95,19 @@ public class RabbitMQConsumerController {
 	private static final long MAX_WAIT_BEFORE_THREAD_TERMINATION_MS = 30000;
 
 	/*
+	 * If true, RabbitMQMsgEnvelope objects will be passed to the message
+	 * handlers by firing a "CDI event"; otherwise, a direct call to the 
+	 * message handler will be made.
+	 */
+	public static final boolean MESSAGE_HANDLER_USE_CDI_EVENTS = false;
+	/*
+	 * If true, the message handlers will be invoked using an asynchronous
+	 * mechanism. This mechanism can be either a direct call or by firing a CDI
+	 * event, according to the setting of MESSAGE_HANDLER_USE_CDI_EVENTS.
+	 */
+	public static final boolean MESSAGE_HANDLER_ASYNCHRONOUS_CALLS = true;
+
+	/*
 	 * This is the maximum number of message handler threads that are allowed to
 	 * run simultaneously. This is set to a sufficiently large number that this
 	 * limit should never be reached because there is no desire or attempt to

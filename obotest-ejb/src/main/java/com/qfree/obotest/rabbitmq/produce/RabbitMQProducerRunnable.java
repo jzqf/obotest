@@ -418,7 +418,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 
 	/**
 	 * 
-	 * @return true if it is OK for the current consumer thread to terminate.
+	 * @return true if it is OK for the current producer thread to terminate.
 	 */
 	private boolean isOKToStop(SortedMap<Long, RabbitMQMsgAck> pendingPublisherConfirms) {
 		boolean stop = false;
@@ -436,7 +436,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 				 * Before we allow the producer threads to terminate, we try
 				 * to ensure that the "pending confirms" map for this thread is 
 				 * empty. Actually, it is not a 
-				 * big deal if we let this thread terminate without processinf
+				 * big deal if we let this thread terminate without processing
 				 * all items in this map because the corresponding 
 				 * messages will automatically be requeued anyway after the 
 				 * connection to the RabbitMQ broker is closed. Of course,this 
@@ -448,7 +448,7 @@ public class RabbitMQProducerRunnable implements Runnable {
 				 * may not be appropriate to allow these messages to be 
 				 * automatically requeued. At any rate, it will be most 
 				 * beneficial if we can be sure that the "pending confirms" map
-				 * is empty, before we let this consumer thread terminate.
+				 * is empty, before we let this producer thread terminate.
 				 */
 				if (pendingPublisherConfirms.size() == 0) {
 					logger.info("This thread will terminate.");

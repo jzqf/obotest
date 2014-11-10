@@ -64,28 +64,30 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * At the time this was written, all conditions evaluate the same for each 
 	 * consumer thread; hence, this variable as well as the other "throttled" 
 	 * variables, could be made "public static". However, in order to be able to
-	 * handle conditions that might be different for different consumer thread, 
+	 * handle conditions that might be different for different consumer threads, 
 	 * these variables have been made private member attributes with getters.
 	 */
 	private volatile boolean throttled = false;
 	//	public static volatile boolean throttled = false;
 	/**
 	 * Set to true when the number of free elements available in the 
-	 * producerMsgQueue queue drops below QUEUE_REMAINING_CAPACITY_LOW_WATER. It
-	 * will then stay false until the number of free elements subsequently rises
-	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
+	 * RabbitMQProducerController.producerMsgQueue queue drops below 
+	 * QUEUE_REMAINING_CAPACITY_LOW_WATER. It will then stay false until the 
+	 * number of free elements subsequently rises above 
+	 * QUEUE_REMAINING_CAPACITY_HIGH_WATER.
 	 */
 	private volatile boolean throttled_ProducerMsgQueue = false;
 	//	public static volatile boolean throttled_ProducerMsgQueue = false;
 	/**
-	 * Set to true when the number of free elements available in the 
-	 * producerMsgQueue queue drops below QUEUE_REMAINING_CAPACITY_LOW_WATER. It
-	 * will then stay false until the number of free elements subsequently rises
-	 * above QUEUE_REMAINING_CAPACITY_HIGH_WATER.
+	 * Set to true when the number of permits acquired for the
+	 * RabbitMQProducerController.unacknowledgeCDIEventsCounterSemaphore 
+	 * semaphore rises above UNACKNOWLEDGED_CDI_EVENTS_HIGH_WATER. It will then 
+	 * stay false until the number of acquired permits subsequently drops below 
+	 * UNACKNOWLEDGED_CDI_EVENTS_LOW_WATER.
 	 */
 	private volatile boolean throttled_UnacknowledgedCDIEvents = false;
 	//	public static volatile boolean throttled_UnacknowledgedCDIEvents = false;
-
+	
 	/*
 	 * Set in the constructor
 	 */
@@ -226,15 +228,15 @@ public class RabbitMQConsumerRunnable implements Runnable {
 							 * AQ:  number of elements in the acknowledgement queue
 							 */
 							logger.info(
-									"UE={}, MH={}, PQ={}, AQ={}, PQ-Throt={}, UE-Throt={}, Throt={}",
+									"UE={}, MH={}, PQ={}, AQ={}, UE-Throt={}, PQ-Throt={}, Throt={}",
 									numUnacknowledgeCDIEvents,
 									RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 											RabbitMQConsumerController.messageHandlerCounterSemaphore
 													.availablePermits(),
 									RabbitMQProducerController.producerMsgQueue.size(),
 									acknowledgementQueue.size(),
-									new Boolean(throttled_ProducerMsgQueue),
 									new Boolean(throttled_UnacknowledgedCDIEvents),
+									new Boolean(throttled_ProducerMsgQueue),
 									new Boolean(throttled)
 									);
 
@@ -258,6 +260,11 @@ public class RabbitMQConsumerRunnable implements Runnable {
 									 */
 									RabbitMQMsgEnvelope rabbitMQMsgEnvelope = new RabbitMQMsgEnvelope(rabbitMQMsgAck,
 											null);
+
+									logger.debug(
+											"Calling handleNextDelivery(rabbitMQMsgEnvelope). UnackedAvailPermits={}...",
+											RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+													.availablePermits());
 
 									try {
 
