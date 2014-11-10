@@ -119,13 +119,14 @@ public class RabbitMQConsumerController {
 	 */
 	public static final int MAX_MESSAGE_HANDLERS = 100;
 	/*
-	 * This is the maximum number of CDI events that have been fired from one of
-	 * the RabbitMQ consumer threads but which have not yet been acknowledged
-	 * by a stateless session been that receives the event in one of its methods
-	 * that is annotated with @Observes. The value set here should be larger 
-	 * than the maximum number of message handler threads that should ever be 
-	 * created. We should never reach this limit. It needs to be large enough so
-	 * that we never block when attempting to acquire a permit.
+	 * This is the maximum number of asynchronous calls or CDI events that can 
+	 * be fired from the RabbitMQ consumer threads but which have not yet been 
+	 * serviced by a stateless session been that receives the call or receives
+	 * the event in one of its methods that is annotated with @Observes. The 
+	 * value set here should be larger than the maximum number of message 
+	 * handler threads that should ever be created. We should never reach this 
+	 * limit. It needs to be large enough so that we never block when attempting
+	 * to acquire a permit.
 	 */
 	public static final int UNSERVICED_ASYNC_CALLS_MAX = 100;
 
@@ -152,7 +153,7 @@ public class RabbitMQConsumerController {
 	 * the number of unserviced asynchronous call drops below
 	 * UNSERVICED_ASYNC_CALLS_LOW_WATER. These limits are defined elsewhere.
 	 */
-	public static final Semaphore unacknowledgeCDIEventsCounterSemaphore = new Semaphore(UNSERVICED_ASYNC_CALLS_MAX);
+	public static final Semaphore unservicedAsyncCallsCounterSemaphore = new Semaphore(UNSERVICED_ASYNC_CALLS_MAX);
 
 	/*
 	 * This counting semaphore is used to count the number of threads that are

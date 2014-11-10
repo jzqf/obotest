@@ -19,7 +19,7 @@ public class RabbitMQMonitorUnservicedAsyncCallsController {
 	@Produces("text/plain;v=1")
 	public int num() {
 		return RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX
-				- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
+				- RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.availablePermits();
 	}
 
 	@GET

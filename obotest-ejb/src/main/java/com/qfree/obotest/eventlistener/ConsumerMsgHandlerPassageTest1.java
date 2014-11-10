@@ -54,10 +54,11 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 			@Observes @RabbitMQMsgEnvelopeQualifier_sync RabbitMQMsgEnvelope rabbitMQMsgEnvelope) {
 
 		/* 
-		 * Release the permit that was acquired just before the CDI event that
-		 * is received in this methods was fired.
+		 * Release the permit that was acquired just before the asynchronous
+		 * call was made or the CDI event that is received in this methods was 
+		 * fired.
 		 */
-		RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+		RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 
 		//	logger.info("this = {}", this);
 
@@ -68,7 +69,7 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 */
 		logger.debug("UE={}, MH={}, PQ={}",
 				RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX
-						- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+						- RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore
 								.availablePermits(),
 				RabbitMQConsumerController.MAX_MESSAGE_HANDLERS -
 						RabbitMQConsumerController.messageHandlerCounterSemaphore
@@ -223,8 +224,9 @@ public class ConsumerMsgHandlerPassageTest1 implements Serializable {
 		 *    limit imposed in RabbitMQConsumerRunnable must e conservative so
 		 *    that the producer queue does not exceed its maximum length AFTER
 		 *    the consumer threads are throttled (since there may still be
-		 *    unacknowledged CDIevents and message handlers that are still 
-		 *    running that will add additional entries into the producer queue.
+		 *    unserviced asynchronous calls or CDIevents and message handlers 
+		 *    that are still running that will add additional entries into the 
+		 *    producer queue.
 		 *
 		 * 2. ackAlgorithm = AFTER_SENT:  The size of the producer queue is
 		 *    limited by the "prefetch count" specified by 

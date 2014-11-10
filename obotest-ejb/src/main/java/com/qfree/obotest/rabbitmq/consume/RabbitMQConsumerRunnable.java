@@ -80,7 +80,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	//	public static volatile boolean throttled_ProducerMsgQueue = false;
 	/**
 	 * Set to true when the number of permits acquired for the
-	 * RabbitMQProducerController.unacknowledgeCDIEventsCounterSemaphore 
+	 * RabbitMQProducerController.unservicedAsyncCallsCounterSemaphore 
 	 * semaphore rises above UNSERVICED_ASYNC_CALLS_HIGH_WATER. It will then 
 	 * stay false until the number of acquired permits subsequently drops below 
 	 * UNSERVICED_ASYNC_CALLS_LOW_WATER.
@@ -205,16 +205,16 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 							// Update "throttled_UnservicedAsyncCalls", if necessary:
 							int numUnservicedAsyncCalls = RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX
-									- RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+									- RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore
 											.availablePermits();
 							if (throttled_UnservicedAsyncCalls) {
 								if (numUnservicedAsyncCalls <= UNSERVICED_ASYNC_CALLS_LOW_WATER) {
-									logger.debug("Consumption throttling based on unacknowldeged CDI events is now *off*");
+									logger.debug("Consumption throttling based on unserviced asynchronous calls is now *off*");
 									throttled_UnservicedAsyncCalls = false;
 								}
 							} else {
 								if (numUnservicedAsyncCalls >= UNSERVICED_ASYNC_CALLS_HIGH_WATER) {
-									logger.debug("Consumption throttling based on unacknowldeged CDI events is now *on*");
+									logger.debug("Consumption throttling based on unserviced asynchronous calls is now *on*");
 									throttled_UnservicedAsyncCalls = true;
 								}
 							}
@@ -246,7 +246,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 								//									msgs_consumed += 1;
 								//									//logger.info("\n\nAbout to consume message...\n");
 
-								if (RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.tryAcquire()) {
+								if (RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.tryAcquire()) {
 
 									/*
 									 * The "deliveryTag" attribute of rabbitMQMsgAck needs to be
@@ -263,7 +263,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 
 									logger.debug(
 											"Calling handleNextDelivery(rabbitMQMsgEnvelope). UnackedAvailPermits={}...",
-											RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore
+											RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore
 													.availablePermits());
 
 									try {
@@ -290,14 +290,14 @@ public class RabbitMQConsumerRunnable implements Runnable {
 											 * neither will handleNextDelivery(...) have fired a CDI event or
 											 * called a method to process the message. This means that the target
 											 * method for processing the message will not run and, therefore, the 
-											 * "unacknowledgeCDIEventsCounterSemaphore" semaphore permit will not
+											 * "unservicedAsyncCallsCounterSemaphore" semaphore permit will not
 											 * be released. If that is the case, we release the permit here. 
 											 * If this is *not* done, the number of permits acquired will keep
 											 * rising until consumer throttling is engaged, at which point the
 											 * system will lock in that mode because there will be no code
 											 * running to release these acquired permits.
 											 */
-											RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+											RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 										}
 
 									} catch (InterruptedException e) {
@@ -308,7 +308,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										* to nack/reject any message.
 										*/
 										logger.warn("InterruptedException received.", e);
-										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 
 									} catch (ShutdownSignalException e) {
 
@@ -322,7 +322,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										logger.info(
 												"ShutdownSignalException received. The RabbitMQ connection will close.",
 												e);
-										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 										break;
 
 									} catch (ConsumerCancelledException e) {
@@ -337,7 +337,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										logger.info(
 												"ConsumerCancelledException received. The RabbitMQ connection will close.",
 												e);
-										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 										break;
 
 									} catch (ObserverException | IllegalArgumentException e) {
@@ -350,7 +350,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										 * by any code, so we need to release the permit here that was
 										 * acquired above.
 										 */
-										RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 										/*
 										 * The message consumed in handleNextDelivery(...) must be Nacked.
 										 * TODO Should we introduce a configuration parameter for requeuing or dead-lettering the message?
@@ -368,7 +368,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 										// 	 * also release the semaphore permit that otherwise would not 
 										// 	 * be released.
 										// 	 */
-										// 	RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.release();
+										// 	RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.release();
 										// 	rabbitMQMsgAck.setRejected(true);
 										// 	rabbitMQMsgAck.setRequeueRejectedMsg(false);  // discard/dead-letter the message
 										// 	acknowledgeMsg(rabbitMQMsgAck);
@@ -611,7 +611,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				 * wait if the condition is not true and neither to I try to
 				 * force the producer threads to run.
 				 */
-				if (unacknowledgedCDIEventPermits() == 0) {
+				if (unservicedAsyncCallsPermits() == 0) {
 					if (acquiredMessageHandlerPermits() == 0) {
 						if (RabbitMQProducerController.producerMsgQueue.size() == 0) {
 							/*
@@ -644,7 +644,7 @@ public class RabbitMQConsumerRunnable implements Runnable {
 				} else {
 					logger.info(
 							"Request to stop detected, but there are still {} unserviced asynchronous call.",
-							unacknowledgedCDIEventPermits());
+							unservicedAsyncCallsPermits());
 				}
 			} else {
 				logger.info(
@@ -661,15 +661,16 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	}
 
 	/**
-	 * Returns the number of unserviced asynchronous call. These correspond to CDI
-	 * events that have been fired, but not received by a message handler by its
+	 * Returns the number of unserviced asynchronous calls. These correspond to 
+	 * normal asynchronous calls that have not yet been serviced, or CDI events
+	 * that have been fired, but not received by a message handler by its
 	 * @Observes method.
 	 * 
 	 * @return the number of message handler permits currently acquired
 	 */
-	private int unacknowledgedCDIEventPermits() {
+	private int unservicedAsyncCallsPermits() {
 		return RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX -
-				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
+				RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.availablePermits();
 	}
 
 	/**
@@ -677,7 +678,8 @@ public class RabbitMQConsumerRunnable implements Runnable {
 	 * represents the number of message handlers threads that are currently
 	 * processing messages consumed from a RabbitMQ broker. The threads are 
 	 * started automatically by the Java EE application container as the target
-	 * of CDI events that are fired by RabbitMQ message consumer threads.
+	 * of standard calls (asynchronous or not) or CDI events that are fired by 
+	 * RabbitMQ message consumer threads.
 	 * 
 	 * @return the number of message handler permits currently acquired
 	 */

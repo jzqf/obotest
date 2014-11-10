@@ -183,10 +183,12 @@ public class RabbitMQProducerController {
 			}
 
 			if (NUM_RABBITMQ_PRODUCER_THREADS <= 2) {
-				// Initialize list rabbitMQProducerThreadImageEventSenders with a 
-				// different singleton session bean in each element.  These beans
-				// will fire the CDI events from the RabbitMQ producer threads that
-				// are managed by the current singleton session bean
+				/* Initialize list rabbitMQProducerThreadImageEventSenders with a 
+				 * different singleton session bean in each element.  These beans
+				 * will call the message handler or fire the CDI events from the
+				 * RabbitMQ producer threads that are managed by the current 
+				 * singleton session bean.
+				 */
 				rabbitMQProducerThreadHelpers.add(messageProducerHelperBean1);
 				if (NUM_RABBITMQ_PRODUCER_THREADS > 1) {
 					rabbitMQProducerThreadHelpers.add(messageProducerHelperBean2);
@@ -335,14 +337,14 @@ public class RabbitMQProducerController {
 		disableConsumerThreads();
 
 		/*
-		 * Now that the consumer thread(s) are disabled, no new CDI events 
-		 * will be fired, but there may be outstanding CDI events that have not
-		 * be received by a message handler by its @Observes method. We must 
-		 * wait for those outstanding CDI events to be received and acknowledged
-		 * by message handlers. 
+		 * Now that the consumer thread(s) are disabled, no new calls will be
+		 * made to the message handlers or CDI events  will be fired, but there 
+		 * may be outstanding calls or CDI events that have not be received by 
+		 * a message handler. We must wait for those outstanding calls or CDI 
+		 * events to be received and acknowledged  by message handlers. 
 		 */
 		logger.info("Waiting for unserviced asynchronous call to be acknowledged by message handlers...");
-		waitForAllCDIEventsToBeAcknowledged();
+		waitForAllUnservicedAsyncCallsToBeAcknowledged();
 
 		/*
 		 * Now that the consumer thread(s) are disabled and there are no 
@@ -447,29 +449,30 @@ public class RabbitMQProducerController {
 	}
 
 	/**
-	 * Waits for all unserviced asynchronous call, if any, to be acknowledged by 
-	 * message handlers. These correspond to CDI events that have been fired,
-	 * but not received by a message handler by its @Observes method.
+	 * Waits for all unserviced asynchronous calls, if any, to be acknowledged
+	 * by message handlers. These correspond to traditional calls or to CDI 
+	 * events that have been fired, but not serviced/received by a message 
+	 * handler.
 	 */
 	@Lock(LockType.WRITE)
-	private void waitForAllCDIEventsToBeAcknowledged() {
+	private void waitForAllUnservicedAsyncCallsToBeAcknowledged() {
 
 		long loopTime = 0;
-		while (unacknowledgedCDIEventPermits() > 0) {
+		while (unservicedAsyncCallsPermits() > 0) {
 
 			/*
 			 * A request to start the producer threads is made repeatedly
 			 * in this loop. This is to ensure that these threads keep running
-			 * while we wait for the CDI events to be acknowledged. This may 
-			 * have to be done once, but there is no known reason why it should
-			 * be necessary to keep doing this in the loop - this is just 
-			 * defensive programming to handle the unlikely case where, from 
-			 * somewhere, a request come in to shut down these threads while we
-			 * are waiting for the CDI events to be acknowledged. In order to 
-			 * start these threads, it is important that this be done by 
-			 * executing start(), and *not* by simply assigning the "RUNNING"
-			 * state to the state attribute for the producer controller 
-			 * singelton, i.e.,
+			 * while we wait for the asynchronous calls or CDI events to be 
+			 * acknowledged. This may have to be done once, but there is no 
+			 * known reason why it should be necessary to keep doing this in the
+			 * loop - this is just defensive programming to handle the unlikely 
+			 * case where, from somewhere, a request come in to shut down these 
+			 * threads while we are waiting for the calls or CDI events to be 
+			 * acknowledged. In order to start these threads, it is important 
+			 * that this be done by executing start(), and *not* by simply 
+			 * assigning the "RUNNING" state to the state attribute for the 
+			 * producer controller singleton, i.e.,
 			 * RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 			 * This will not work for starting the threads in this case because 
 			 * heartBeat() will not run periodically while this method executes,
@@ -479,8 +482,8 @@ public class RabbitMQProducerController {
 			 */
 			start();	// call repeatedly, just in case
 
-			logger.info("{} outstanding CDI events waiting to be acknowledged...",
-					unacknowledgedCDIEventPermits());
+			logger.info("{} outstanding calls or CDI events waiting to be acknowledged...",
+					unservicedAsyncCallsPermits());
 
 			loopTime += WAITING_LOOP_SLEEP_MS;
 			try {
@@ -489,17 +492,17 @@ public class RabbitMQProducerController {
 			}
 
 			if (loopTime >= MAX_WAIT_BEFORE_THREAD_TERMINATION_MS) {
-				logger.warn("Timeout waiting for all outstanding CDI events to be acknowledged");
+				logger.warn("Timeout waiting for all outstanding calls or CDI events to be acknowledged");
 				break;
 			}
 
 		}
 
-		if (unacknowledgedCDIEventPermits() == 0) {
-			logger.info("All outstanding CDI events have been acknowledged by amessage handler");
+		if (unservicedAsyncCallsPermits() == 0) {
+			logger.info("All outstanding calls or CDI events have been acknowledged by amessage handler");
 		} else {
 			logger.warn(
-					"{} CDI events are still outstanding and have not be acknowledged by a message handle. These messages may be lost!",
+					"{} calls or CDI events are still outstanding and have not be acknowledged by a message handle. These messages may be lost!",
 					acquiredMessageHandlerPermits());
 		}
 
@@ -519,16 +522,16 @@ public class RabbitMQProducerController {
 			/*
 			 * A request to start the producer threads is made repeatedly
 			 * in this loop. This is to ensure that these threads keep running
-			 * while we wait for all message handlers to finish process the CDI
-			 * events they received. This may have to be done once, but there is
-			 * no known reason why it should be necessary to keep doing this in 
-			 * the loop - this is just defensive programming to handle the 
-			 * unlikely case where, from somewhere, a request come in to shut 
-			 * down these threads while we are waiting for the message handlers
-			 * to finish. In order to  start these threads, it is important that
-			 * this be done by executing start(), and *not* by simply assigning
-			 * the "RUNNING" state to the state attribute for the producer 
-			 * controller singelton, i.e.,
+			 * while we wait for all message handlers to finish process the 
+			 * calls or CDI events they received. This may have to be done once,
+			 * but there is no known reason why it should be necessary to keep 
+			 * doing this in the loop - this is just defensive programming to 
+			 * handle the unlikely case where, from somewhere, a request come in
+			 * to shut down these threads while we are waiting for the message 
+			 * handlers to finish. In order to  start these threads, it is 
+			 * important that this be done by executing start(), and *not* by 
+			 * simply assigning the "RUNNING" state to the state attribute for 
+			 * the producer controller singleton, i.e.,
 			 * RabbitMQProducerController.state = RabbitMQProducerControllerStates.RUNNING;
 			 * This will not work for starting the threads in this case because 
 			 * heartBeat() will not run peridically while this method executes,
@@ -699,24 +702,25 @@ public class RabbitMQProducerController {
 	}
 
 	/**
-	 * Returns the number of unserviced asynchronous call. These correspond to CDI
-	 * events that have been fired, but not received by a message handler by its
-	 * @Observes method.
+	 * Returns the number of unserviced asynchronous calls. These correspond to 
+	 * asynchronous calls or CDI events that have been fired but not serviced or
+	 * received by a message handler.
 	 * 
 	 * @return the number of message handler permits currently acquired
 	 */
 	@Lock(LockType.READ)
-	private int unacknowledgedCDIEventPermits() {
+	private int unservicedAsyncCallsPermits() {
 		return RabbitMQConsumerController.UNSERVICED_ASYNC_CALLS_MAX -
-				RabbitMQConsumerController.unacknowledgeCDIEventsCounterSemaphore.availablePermits();
+				RabbitMQConsumerController.unservicedAsyncCallsCounterSemaphore.availablePermits();
 	}
 
 	/**
 	 * Returns the number of message handler permits currently acquired. This
 	 * represents the number of message handlers threads that are currently
 	 * processing messages consumed from a RabbitMQ broker. The threads are 
-	 * started automatically by the Java EE application container as the target
-	 * of CDI events that are fired by RabbitMQ message consumer threads.
+	 * started automatically by the Java EE application container by calls
+	 * (asynchronous or not) or as the target of CDI events that are fired by 
+	 * RabbitMQ message consumer threads.
 	 * 
 	 * @return the number of message handler permits currently acquired
 	 */
