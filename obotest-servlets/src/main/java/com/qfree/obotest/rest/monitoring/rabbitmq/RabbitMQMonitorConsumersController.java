@@ -118,17 +118,17 @@ public class RabbitMQMonitorConsumersController {
 	}
 
 	@GET
-	@Path("/{thread}/throttled_unacked_async_calls")
+	@Path("/{thread}/throttled_unserviced_async_calls")
 	@Produces("text/plain;v=1")
-	public int throttled_unacked_async_calls(@PathParam("thread") int thread) {
+	public int throttled_unserviced_async_calls(@PathParam("thread") int thread) {
 
-		//logger.info("/throttled_unacked_async_calls requested for consumer thread #{}", thread);
+		//logger.info("/throttled_unserviced_async_calls requested for consumer thread #{}", thread);
 
-		boolean throttled_unacked_async_calls = false;
+		boolean throttled_unserviced_async_calls = false;
 
 		RabbitMQConsumerRunnable rabbitMQConsumerRunnable = getRabbitMQConsumerRunnable(thread - 1);
 		if (rabbitMQConsumerRunnable != null) {
-			throttled_unacked_async_calls = rabbitMQConsumerRunnable.isThrottled_UnacknowledgedCDIEvents();
+			throttled_unserviced_async_calls = rabbitMQConsumerRunnable.isThrottled_UnservicedAsyncCalls();
 		} else {
 			/*
 			 * This case can occur if this code is called before the 
@@ -136,9 +136,9 @@ public class RabbitMQMonitorConsumersController {
 			 */
 		}
 		logger.debug(
-				"/throttled_unacked_async_calls requested for consumer thread #{}.\n    throttled_unacked_async_calls={}, (throttled_unacked_async_calls ? 1 : 0)={}",
-				thread, throttled_unacked_async_calls, throttled_unacked_async_calls ? 1 : 0);
-		return throttled_unacked_async_calls ? 1 : 0;
+				"/throttled_unserviced_async_calls requested for consumer thread #{}.\n    throttled_unserviced_async_calls={}, (throttled_unserviced_async_calls ? 1 : 0)={}",
+				thread, throttled_unserviced_async_calls, throttled_unserviced_async_calls ? 1 : 0);
+		return throttled_unserviced_async_calls ? 1 : 0;
 	}
 
 	/**
