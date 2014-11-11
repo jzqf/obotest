@@ -1,4 +1,4 @@
-package com.qfree.obotest.rabbitmq.consume.passagetest1;
+package com.qfree.obotest.passagetest1;
 
 import java.io.IOException;
 
@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.qfree.obotest.eventlistener.ConsumerMsgHandlerPassageTest1;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgAck;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelope;
 import com.qfree.obotest.rabbitmq.RabbitMQMsgEnvelopeQualifier_async;

@@ -1,4 +1,4 @@
-package com.qfree.obotest.rabbitmq.produce.passagetest1;
+package com.qfree.obotest.passagetest1;
 
 import java.io.IOException;
 

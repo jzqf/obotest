@@ -1,4 +1,4 @@
-package com.qfree.obotest.rabbitmq.produce.passagetest1;
+package com.qfree.obotest.passagetest1;
 
 import javax.ejb.ConcurrencyManagement;
 import javax.ejb.ConcurrencyManagementType;
@@ -10,10 +10,10 @@ import com.qfree.obotest.rabbitmq.HelperBean1;
 
 /*
  * This class is essentially identical to 
- * RabbitMQProducerHelperPassageTest1Bean2.
+ * RabbitMQConsumerHelperPassageTest1Bean2.
  * 
  * Two identical classes are used to create two singleton session beans that 
- * can divide the workload between two separate MessageMQ producer threads.
+ * can divide the workload between two separate MessageMQ consumer threads.
  * 
  * Each of these two classes are differentiated by their qualifiers:
  * 
@@ -24,6 +24,6 @@ import com.qfree.obotest.rabbitmq.HelperBean1;
 @LocalBean
 @Alternative
 @HelperBean1
-public class RabbitMQProducerHelperPassageTest1Bean1 extends RabbitMQProducerHelperPassageTest1 {
+public class RabbitMQConsumerHelperPassageTest1Bean1 extends RabbitMQConsumerHelperPassageTest1 {
 
 }
