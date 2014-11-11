@@ -5,6 +5,7 @@ import java.util.List;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerRunnable;
+import com.qfree.obotest.rest.ReST;
 
 @Path("/rabbitmq/publishers")
 @RequestScoped
@@ -25,22 +27,26 @@ public class RabbitMQMonitorPublishersController {
 	RabbitMQProducerController rabbitMQProducerController;
 
 	@GET
-	@Produces("text/plain;v=1")
-	public int numPublishers() {
+	@Produces("text/plain")
+	public int numPublishers(@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 		return RabbitMQProducerController.NUM_RABBITMQ_PRODUCER_THREADS;
 	}
 
 	@GET
 	@Path("/state")
-	@Produces("text/plain;v=1")
-	public String state() {
+	@Produces("text/plain")
+	public String state(@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 		return RabbitMQProducerController.state.toString();
 	}
 
 	@GET
 	@Path("/{thread}/pending_publisher_acks")
-	@Produces("text/plain;v=1")
-	public int pending_publisher_acks(@PathParam("thread") int thread) {
+	@Produces("text/plain")
+	public int pending_publisher_acks(@PathParam("thread") int thread,
+			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 		
 		//logger.info("/pending_publisher_acks requested for publisher thread #{}", thread);
 

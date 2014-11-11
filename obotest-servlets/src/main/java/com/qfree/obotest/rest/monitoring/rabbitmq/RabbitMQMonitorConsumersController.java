@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerRunnable;
+import com.qfree.obotest.rest.ReST;
 
 @Path("/rabbitmq/consumers")
 @RequestScoped
@@ -24,24 +25,27 @@ public class RabbitMQMonitorConsumersController {
 	RabbitMQConsumerController rabbitMQConsumerController;
 
 	@GET
-	@Produces("text/plain;v=1")
-	public int numConsumers() {
+	@Produces("text/plain")
+	public int numConsumers(@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 		return RabbitMQConsumerController.NUM_RABBITMQ_CONSUMER_THREADS;
 	}
 
 	@GET
 	@Path("/state")
-	@Produces("text/plain;v=1")
-	public String state() {
+	@Produces("text/plain")
+	public String state(@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 		return RabbitMQConsumerController.state.toString();
 	}
 
 	@GET
 	@Path("/{thread}/ack_queue/{subCommand}")
-	@Produces("text/plain;v=1")
+	@Produces("text/plain")
 	public int ack_queue_size_v1(@PathParam("thread") int thread,
 			@PathParam("subCommand") String subCommand,
 			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 		
 		//logger.info("/ack_queue/size requested for consumer thread #{}", thread);
 		//logger.info("acceptHeader = {}", acceptHeader);
@@ -70,15 +74,19 @@ public class RabbitMQMonitorConsumersController {
 
 	//	@GET
 	//	@Path("/{thread}/ack_queue/capacity")
-	//	@Produces("text/plain;v=1")
-	//	public int ack_queue_capacity(@PathParam("thread") int thread) {
+	//	@Produces("text/plain")
+	//	public int ack_queue_capacity(@PathParam("thread") int thread, 
+	//          @HeaderParam("Accept") String acceptHeader) {
+	//      String apiVersion = ReST.extractAPIVersion(acceptHeader);
 	//		return RabbitMQConsumerController.ACKNOWLEDGEMENT_QUEUE_LENGTH;  // independent of "thread"
 	//	}
 
 	@GET
 	@Path("/{thread}/throttled")
-	@Produces("text/plain;v=1")
-	public int throttled(@PathParam("thread") int thread) {
+	@Produces("text/plain")
+	public int throttled(@PathParam("thread") int thread,
+			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 
 		//logger.info("/throttled requested for consumer thread #{}", thread);
 
@@ -98,8 +106,10 @@ public class RabbitMQMonitorConsumersController {
 
 	@GET
 	@Path("/{thread}/throttled_publisher_msg_queue")
-	@Produces("text/plain;v=1")
-	public int throttled_publisher_msg_queue(@PathParam("thread") int thread) {
+	@Produces("text/plain")
+	public int throttled_publisher_msg_queue(@PathParam("thread") int thread,
+			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 
 		//logger.info("/throttled_publisher_msg_queue requested for consumer thread #{}", thread);
 
@@ -119,8 +129,10 @@ public class RabbitMQMonitorConsumersController {
 
 	@GET
 	@Path("/{thread}/throttled_unserviced_async_calls")
-	@Produces("text/plain;v=1")
-	public int throttled_unserviced_async_calls(@PathParam("thread") int thread) {
+	@Produces("text/plain")
+	public int throttled_unserviced_async_calls(@PathParam("thread") int thread,
+			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 
 		//logger.info("/throttled_unserviced_async_calls requested for consumer thread #{}", thread);
 

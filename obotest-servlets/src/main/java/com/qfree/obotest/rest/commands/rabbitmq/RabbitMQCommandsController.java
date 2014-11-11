@@ -3,6 +3,7 @@ package com.qfree.obotest.rest.commands.rabbitmq;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -14,6 +15,7 @@ import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController;
 import com.qfree.obotest.rabbitmq.consume.RabbitMQConsumerController.RabbitMQConsumerControllerStates;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController;
 import com.qfree.obotest.rabbitmq.produce.RabbitMQProducerController.RabbitMQProducerControllerStates;
+import com.qfree.obotest.rest.ReST;
 
 @Path("/rabbitmq/commands")
 /*
@@ -40,8 +42,9 @@ public class RabbitMQCommandsController {
 
 	@GET
 	@Path("/start")
-	@Produces("text/plain;v=1")
-	public String start() {
+	@Produces("text/plain")
+	public String start(@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 
 		logger.info("Calling rabbitMQProducerController.start()...");
 		rabbitMQProducerController.start();
@@ -54,8 +57,9 @@ public class RabbitMQCommandsController {
 
 	@GET
 	@Path("/stop")
-	@Produces("text/plain;v=1")
-	public String stop() {
+	@Produces("text/plain")
+	public String stop(@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 
 		logger.info("Calling rabbitMQProducerController.shutdown()...");
 		rabbitMQProducerController.shutdown();
@@ -66,12 +70,18 @@ public class RabbitMQCommandsController {
 
 	@GET
 	@Path("/consumers/{subCommand}")
-	@Produces("text/plain;v=1")
-	public String executeConsumerCommand(@PathParam("subCommand") String subCommand) {
+	@Produces("text/plain")
+	public String executeConsumerCommand(@PathParam("subCommand") String subCommand,
+			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
+
+		//		logger.info("subCommand = {}, apiVersion = {}", subCommand, apiVersion);
 
 		String returnMsg = "";
 
 		if (subCommand.equals("disable")) {
+
+			// Ex: curl -H "Accept: text/plain;v=1" http://localhost:8080/obotest-servlets/rest/rabbitmq/commands/consumers/disable
 
 			logger.info("Calling rabbitMQConsumerController.disable()...");
 			rabbitMQConsumerController.disable();
@@ -80,6 +90,8 @@ public class RabbitMQCommandsController {
 			returnMsg = "RabbitMQ consumer signalled to disable itself";
 
 		} else if (subCommand.equals("enable")) {
+
+			// Ex: curl -H "Accept: text/plain;v=1" http://localhost:8080/obotest-servlets/rest/rabbitmq/commands/consumers/enable
 
 			logger.info("Calling rabbitMQConsumerController.enable()...");
 			rabbitMQConsumerController.enable();
@@ -115,8 +127,10 @@ public class RabbitMQCommandsController {
 
 	@GET
 	@Path("/publishers/{subCommand}")
-	@Produces("text/plain;v=1")
-	public String executeProducerCommand(@PathParam("subCommand") String subCommand) {
+	@Produces("text/plain")
+	public String executeProducerCommand(@PathParam("subCommand") String subCommand,
+			@HeaderParam("Accept") String acceptHeader) {
+		String apiVersion = ReST.extractAPIVersion(acceptHeader);
 
 		String returnMsg = "";
 
