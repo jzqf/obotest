@@ -167,10 +167,11 @@ public class RabbitMQProducerRunnable implements Runnable {
 
 		try {
 			messageProducerHelper.openConnection();
+			Channel channel = null;
 			try {
 				messageProducerHelper.openChannel();
 
-				Channel channel = messageProducerHelper.getChannel();
+				channel = messageProducerHelper.getChannel();
 
 				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_TX) {
 					/*
@@ -372,12 +373,27 @@ public class RabbitMQProducerRunnable implements Runnable {
 						terminationRequestedTime = 0;  // reset, if necessary
 					}
 				}
+
 			} catch (IOException e) {
 				logger.error(
 						"Exception thrown setting up RabbitMQ channel for conusuming messages. This thread will terminate.",
 						e);
 			} finally {
 				logger.info("Closing RabbitMQ channel...");
+
+				if (RabbitMQConsumerController.ackAlgorithm == AckAlgorithms.AFTER_PUBLISHED_CONFIRMED) {
+					/*
+					 * Closing the channel will probably clear any listeners 
+					 * that are installed, but I have not seen explicit 
+					 * documentation that specifies this; therefore, we do that
+					 * explicitly here.
+					 */
+					if (channel != null) {
+						channel.clearConfirmListeners();
+						channel.clearReturnListeners();
+					}
+				}
+
 				messageProducerHelper.closeChannel();
 			}
 
